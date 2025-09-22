@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>LLM 结构树测试模板</title>
+
+    <!-- Tailwind (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="styles.css" />
+
+    <!-- Vue 3 (CDN) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <div id="app" class="min-h-screen flex flex-col">
+      <!-- 顶部工具区 -->
+      <header class="border-b bg-white">
+        <div class="mx-auto max-w-[1400px] px-4 py-3 space-y-3">
+          <!-- 行1：字典管理 + API 输入 -->
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <!-- 左：字典管理 -->
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-sm font-semibold text-gray-700">字典管理</span>
+              <button
+                class="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+                type="button"
+                title="上传/导入字典"
+              >
+                上传字典
+              </button>
+              <button
+                class="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+                type="button"
+                title="切换字典"
+              >
+                切换字典
+              </button>
+              <button
+                class="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+                type="button"
+                title="刷新状态"
+              >
+                刷新状态
+              </button>
+            </div>
+
+            <!-- 右：API 输入 -->
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div class="col-span-1 sm:col-span-2">
+                <label class="block text-xs text-gray-500 mb-1">API Endpoint</label>
+                <input
+                  type="text"
+                  placeholder="https://api.example.com/parse"
+                  class="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+              <div class="col-span-1">
+                <label class="block text-xs text-gray-500 mb-1">API Key</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  class="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 行2：状态栏 -->
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-500">字典状态</span>
+              <span
+                class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
+                title="占位状态"
+              >
+                未加载
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-500">API 状态</span>
+              <span
+                class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
+                title="占位状态"
+              >
+                未连接
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 主体：三列布局 -->
+      <main class="flex-1">
+        <div class="mx-auto max-w-[1400px] px-4 py-4">
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_2fr_1.5fr]">
+            <!-- 左列：查询字典栏 -->
+            <section class="rounded-2xl border bg-white p-4 flex flex-col min-h-[60vh]">
+              <div class="mb-3">
+                <h2 class="text-base font-semibold">查询字典</h2>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  这里展示字典查询结果（占位）。
+                </p>
+              </div>
+
+              <div class="mb-3 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="输入要查询的词…"
+                  class="w-full rounded-md border px-3 py-2 text-sm"
+                />
+                <button
+                  class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                  type="button"
+                >
+                  🔍
+                </button>
+              </div>
+
+              <div class="overflow-auto rounded-md border">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-gray-50">
+                    <tr class="text-left">
+                      <th class="px-3 py-2 font-semibold">toki pona</th>
+                      <th class="px-3 py-2 font-semibold">释义</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="border-t">
+                      <td class="px-3 py-2">占位项 A</td>
+                      <td class="px-3 py-2">占位项 A</td>
+                      <td class="px-3 py-2">说明文字</td>
+                    </tr>
+                    <tr class="border-t">
+                      <td class="px-3 py-2">占位项 B</td>
+                      <td class="px-3 py-2">占位项 A</td>
+                      <td class="px-3 py-2">说明文字</td>
+                    </tr>
+                    <tr class="border-t">
+                      <td class="px-3 py-2">占位项 C</td>
+                      <td class="px-3 py-2">占位项 A</td>
+                      <td class="px-3 py-2">说明文字</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- 中列：上输入框、下结果框 -->
+            <section class="rounded-2xl border bg-white p-4 flex flex-col min-h-[60vh]">
+              <div class="grid grid-rows-2 gap-4 h-full">
+                <!-- 上：输入框 -->
+                <div class="flex flex-col">
+                  <div class="mb-2 flex gap-2">
+                    <div class="w-full ">
+                      <h2 class="text-base font-semibold">输入</h2>
+                      <p class="text-xs text-gray-500 mt-0.5">
+                        输入要分解的句子（占位）。
+                      </p>
+                    </div>
+                    <button
+                      class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                      type="button"
+                    >
+                      ✅
+                    </button>
+                  </div>
+                  <textarea
+                    class="flex-1 rounded-md border px-3 py-2 text-sm resize-none"
+                    placeholder="例如：小孩在屋子里吃饭。"
+                  ></textarea>
+                </div>
+
+                <!-- 下：结果框 -->
+                <div class="flex flex-col">
+                  <div class="mb-2">
+                    <h2 class="text-base font-semibold">结果</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                      这里显示根据结构树生成的内容（占位）。
+                    </p>
+                  </div>
+                  <div
+                    class="flex-1 rounded-md border p-3 text-sm bg-gray-50 overflow-auto"
+                  >
+                    <p class="text-gray-500">
+                      结果占位：等待结构树与生成逻辑接入…
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 右列：代码框（JSON 结构树） -->
+            <section class="rounded-2xl border bg-white p-4 flex flex-col min-h-[60vh]">
+              <div class="mb-2 flex gap-2">
+                <div class="w-full ">
+                  <h2 class="text-base font-semibold">结构树 (JSON)</h2>
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    可编辑的 JSON 区域（占位）。
+                  </p>
+                </div>
+                <button
+                  class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                  type="button"
+                >
+                  ✅
+                </button>
+              </div>
+              <textarea
+                class="code-box flex-1 rounded-md border px-3 py-2 text-sm resize-none font-mono leading-5"
+                spellcheck="false"
+                placeholder='等待输入...'
+              ></textarea>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- 应用脚本 -->
+    <script src="app.js"></script>
+  </body>
+</html>

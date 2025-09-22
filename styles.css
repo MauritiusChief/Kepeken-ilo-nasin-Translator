@@ -1,0 +1,33 @@
+/* 你可以在这里覆盖或补充样式；Tailwind 由 CDN 注入 */
+/* 仅做一些轻微的 UI 细节处理作为占位 */
+
+html, body, #app {
+  height: 100%;
+}
+
+/* 代码框滚动条微调（可选） */
+.code-box {
+  tab-size: 2;
+  -moz-tab-size: 2;
+  overflow: auto;
+}
+
+/* 可选：更柔和的滚动条（仅支持的浏览器生效） */
+.code-box::-webkit-scrollbar,
+table::-webkit-scrollbar,
+div::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.code-box::-webkit-scrollbar-thumb,
+table::-webkit-scrollbar-thumb,
+div::-webkit-scrollbar-thumb {
+  background: #d1d5db; /* Tailwind gray-300 */
+  /* border-radius: 9999px; */
+}
+.code-box::-webkit-scrollbar-track,
+table::-webkit-scrollbar-track,
+div::-webkit-scrollbar-track {
+  background: #f3f4f6; /* Tailwind gray-100 */
+  /* border-radius: 9999px; */
+}
