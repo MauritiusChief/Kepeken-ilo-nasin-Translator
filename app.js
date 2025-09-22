@@ -21,7 +21,6 @@ createApp({
         String(a?.[0] ?? '').localeCompare(String(b?.[0] ?? ''), 'zh')
       );
     },
-
     filteredRows() {
       let q = this.searchText.trim();
       if (!q) return this.sortedRows;
@@ -32,6 +31,7 @@ createApp({
     },
   },
   methods: {
+    // 字典查询功能
     async loadDefaultDictionary() {
       try {
         this.dictError = null;
@@ -49,6 +49,7 @@ createApp({
 
         this.dictRows = dataRows;
         this.dictLoaded = true;
+        console.log('默认字典加载完成')
       } catch (e) {
         console.error('加载字典失败：', e);
         this.dictError = e?.message || String(e);
