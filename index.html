@@ -73,9 +73,36 @@
 
           <!-- 行2：状态栏 -->
           <div class="flex flex-wrap items-center gap-3">
+            <!-- 字典状态 -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-500">字典状态</span>
               <span
+                v-if="dictLoading"
+                class="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                title="正在加载 dictionary.csv"
+              >
+                <svg class="mr-1 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4A4 4 0 008 12H4z"></path>
+                </svg>
+                加载中…
+              </span>
+              <span
+                v-else-if="dictError"
+                class="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700"
+                :title="dictError"
+              >
+                加载失败
+              </span>
+              <span
+                v-else-if="dictLoaded"
+                class="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700"
+                :title="`已成功加载 ${dictRows.length} 条`"
+              >
+                已加载 {{ dictRows.length }} 条
+              </span>
+              <span
+                v-else
                 class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
                 title="占位状态"
               >
@@ -110,41 +137,35 @@
 
               <div class="mb-3 flex gap-2">
                 <input
+                  v-model.trim="searchText"
                   type="text"
                   placeholder="输入要查询的词…"
                   class="w-full rounded-md border px-3 py-2 text-sm"
                 />
-                <button
-                  class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-                  type="button"
-                >
-                  🔍
-                </button>
               </div>
 
-              <div class="overflow-auto rounded-md border">
+              <div class="overflow-auto rounded-md border max-h-96">
                 <table class="min-w-full text-sm">
                   <thead class="bg-gray-50">
                     <tr class="text-left">
-                      <th class="px-3 py-2 font-semibold">toki pona</th>
+                      <th class="px-3 py-2 font-semibold">道本语</th>
+                      <th class="px-3 py-2 font-semibold">翻译</th>
                       <th class="px-3 py-2 font-semibold">释义</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr class="border-t">
-                      <td class="px-3 py-2">占位项 A</td>
-                      <td class="px-3 py-2">占位项 A</td>
-                      <td class="px-3 py-2">说明文字</td>
+                    <tr v-for="(row, idx) in filteredRows" :key="idx" class="border-t">
+                      <!-- 使用 v-html 渲染加粗后的文本 -->
+                      <td class="px-3 py-2" v-html="highlight(row[0])"></td>
+                      <td class="px-3 py-2" v-html="highlight(row[1])"></td>
+                      <td class="px-3 py-2" v-html="highlight(row[2])"></td>
                     </tr>
-                    <tr class="border-t">
-                      <td class="px-3 py-2">占位项 B</td>
-                      <td class="px-3 py-2">占位项 A</td>
-                      <td class="px-3 py-2">说明文字</td>
-                    </tr>
-                    <tr class="border-t">
-                      <td class="px-3 py-2">占位项 C</td>
-                      <td class="px-3 py-2">占位项 A</td>
-                      <td class="px-3 py-2">说明文字</td>
+
+                    <!-- 空态 -->
+                    <tr v-if="filteredRows.length === 0">
+                      <td class="px-3 py-8 text-center text-gray-500" colspan="3">
+                        未找到匹配项
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -223,6 +244,6 @@
     </div>
 
     <!-- 应用脚本 -->
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
