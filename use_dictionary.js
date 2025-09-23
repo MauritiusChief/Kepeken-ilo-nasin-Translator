@@ -1,7 +1,5 @@
 import { parseCSV, escapeHTML, escapeRegExp } from './helper.js';
 
-// 在 CDN + 全局构建下，直接从全局 Vue 取 API
-// 也可以改成从参数里解构（见文末可选写法）
 const { ref, computed } = Vue;
 
 export function useDictionary() {

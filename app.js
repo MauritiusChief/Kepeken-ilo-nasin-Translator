@@ -1,6 +1,6 @@
 // app.js
 import { parseCSV, escapeHTML, escapeRegExp } from "./helper.js"; // 你原来就有
-import { useDictionary } from "./dictionary.js";               // 新增引入
+import { useDictionary } from "./use_dictionary.js";               // 新增引入
 
 const { createApp, onMounted } = Vue;
 
