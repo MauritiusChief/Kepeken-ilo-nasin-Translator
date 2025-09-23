@@ -54,8 +54,6 @@ export function parseCSV(text) {
   return rows.filter(r => r.some(c => String(c).trim() !== ''));
 }
 
-// 在单元格字符串中加粗匹配的子串；安全地转义 HTML
-
 // 工具：转义 HTML
 export function escapeHTML(s) {
   return String(s)
