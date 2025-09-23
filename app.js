@@ -14,7 +14,7 @@ createApp({
     } = useDictionary();
 
     const {
-      apiUrl, apiKey, apiError, inputSentence, jsonLoading, jsonTree,
+      apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       parseToLevel1Tree,
     } = useLLM();
 
@@ -28,7 +28,7 @@ createApp({
       // 字典相关
       dictRows, searchText, dictLoaded, dictError, sortedRows, filteredRows, loadDefaultDictionary, highlight,
       // LLM相关
-      apiUrl, apiKey, apiError, inputSentence, jsonLoading, jsonTree, parseToLevel1Tree,
+      apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree, parseToLevel1Tree,
     };
   }
 }).mount('#app');

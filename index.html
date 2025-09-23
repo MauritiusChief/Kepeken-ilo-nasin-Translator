@@ -191,9 +191,9 @@
                       class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       type="button"
                       @click="parseToLevel1Tree"
-                      :disabled="jsonLoading || !apiUrl || !apiKey || !inputSentence"
+                      :disabled="jsonLevel1TreeLoading || !apiUrl || !apiKey || !inputSentence"
                     >
-                      <template v-if="jsonLoading"> <!-- 加载动画 -->
+                      <template v-if="jsonLevel1TreeLoading"> <!-- 加载动画 -->
                         <svg class="mr-1 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                           <path class="opacity-75" fill="currentColor"
@@ -248,6 +248,21 @@
                 >
                   <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M5 13l4 4L19 7" />
+                  </svg>
+
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 6l6 6-6 6" />
+                    <path d="M11 6l6 6-6 6" />
+                  </svg>
+
+                  <svg class="mr-1 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4A4 4 0 008 12H4z"></path>
                   </svg>
                 </button>
               </div>

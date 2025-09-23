@@ -1,6 +1,12 @@
 
 const { ref } = Vue;
 
+const jsonParseState = Object.freeze({
+  level1: "level1",
+  level2: "level2",
+  level3: "level3"
+})
+
 const promtForLevel1Tree = `
 你是一个只输出 JSON 的解析器。请将给定中文句子分解为“一级结构树”，字段包括：
 - "情景列": string[] —— 情景短语的数组（可为空数组）
@@ -70,18 +76,42 @@ const promtForLevel1Tree = `
 }
 `
 
+const promtForLevel2Tree = `
+你是一个只输出 JSON 的解析器。现在对一些字符串条目进行分类或者分解。输入是一个待分解条目的数组 items；每个条目包含：
+- id: string —— 唯一标识
+- type: "情景" | "谓语" | "宾语" | "介词短语"
+- text: string —— 原句中的片段
+
+请按以下规则把每个条目转为“二级结构”：
+1) 情景 → { "类型": "名词短语"|"句子", "值": "<...>" }
+2) 谓语 → { "类型": "名词短语"|"动词短语", "值": "<...>" }
+3) 宾语 → { "类型": "名词短语"|"句子", "值": "<...>" }
+4) 介词短语 → { "介词":"<介词>", "名词短语":"<名词短语>" }
+
+输出严格为：
+{ "results": [ { "id":"...", "type":"...", "parsed": <结构> }, ... ] }
+
+必须遵守：
+- 仅输出 JSON（不得包含额外文本）。
+- 所有输入 id 原样返回；无法判断时也必须给出结构（允许把原文放入 "值"）。
+- 不要改变输入语义范围。
+`
+
 export function useLLM() {
   // state
   const apiUrl = ref("https://api.deepseek.com/chat/completions");
   const apiKey = ref('');
   const apiError = ref(null);
   const inputSentence = ref('');
-  const jsonLoading = ref(false);
+  const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
+  const jsonButtonState = ref(jsonParseState.level1)
+  const jsonLevel2TreeLoading = ref(false);
+  const jsonLevel2TreeLeaves = ref([])
 
   // methods
   async function parseToLevel1Tree() {
-    jsonLoading.value = true;
+    jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
     try {
       const response = await fetch(apiUrl.value, {
@@ -107,14 +137,17 @@ export function useLLM() {
       console.error(e);
       apiError.value = e?.message || String(e);
     } finally {
-      jsonLoading.value = false;
+      jsonLevel1TreeLoading.value = false;
       console.log('一级结构树解析结束')
     }
+  }
+  async function parseToLevel2Tree() {
+
   }
 
   return {
     // state
-    apiUrl, apiKey, apiError, inputSentence, jsonLoading, jsonTree,
+    apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
     // methods
     parseToLevel1Tree,
   };
