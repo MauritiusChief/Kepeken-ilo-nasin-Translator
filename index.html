@@ -56,6 +56,7 @@
               <div class="col-span-1 sm:col-span-2">
                 <label class="block text-xs text-gray-500 mb-1">API Endpoint</label>
                 <input
+                  v-model="apiUrl"
                   type="text"
                   placeholder="https://api.example.com/parse"
                   class="w-full rounded-md border px-3 py-2 text-sm"
@@ -64,6 +65,7 @@
               <div class="col-span-1">
                 <label class="block text-xs text-gray-500 mb-1">API Key</label>
                 <input
+                  v-model="apiKey"
                   type="password"
                   placeholder="••••••••"
                   class="w-full rounded-md border px-3 py-2 text-sm"
@@ -188,11 +190,14 @@
                     <button
                       class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
                       type="button"
+                      @click="parseToLevel1Tree"
+                      :disabled="jsonLoading || !apiUrl || !apiKey || !inputSentence"
                     >
                       ✅
                     </button>
                   </div>
                   <textarea
+                    v-model="inputSentence"
                     class="flex-1 rounded-md border px-3 py-2 text-sm resize-none"
                     placeholder="例如：小孩在屋子里吃饭。"
                   ></textarea>
@@ -234,6 +239,7 @@
                 </button>
               </div>
               <textarea
+                v-model="jsonTree"
                 class="code-box flex-1 rounded-md border px-3 py-2 text-sm resize-none font-mono leading-5"
                 spellcheck="false"
                 placeholder='等待输入...'
