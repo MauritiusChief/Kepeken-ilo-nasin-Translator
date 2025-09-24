@@ -7,8 +7,8 @@ const jsonParseState = Object.freeze({
   level3: "level3"
 })
 
-const promtForLevel1Tree = `
-你是一个只输出 JSON 的解析器。请将给定中文句子分解为“一级结构树”，字段包括：
+const promtParseSentence = `
+你是一个只输出 JSON 的解析器。请将给定中文句子分解为“结构树”，字段包括：
 - "情景列": string[] —— 情景短语的数组（可为空数组）
 - "主语": string —— 句子的主语名词短语
 - "谓语列": { "谓语": string, "宾语列": string[], "介词短语列": string[] }[]
@@ -76,8 +76,29 @@ const promtForLevel1Tree = `
   ]
 }
 `
+async function parseSentence(url, key, sentence) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key
+    },
+    body: JSON.stringify({
+      model: "deepseek-reasoner",
+      // model: "deepseek-chat",
+      messages: [
+        { role: "system", content: promtParseSentence },
+        { role: "user", content: "现在请解析这个句子："+sentence }
+      ],
+      response_format: { type: "json_object" },
+    })
+  });
+  const data = await response.json()
+  console.log(data)
+  return data.choices?.[0]?.message?.content || "（无一级解析结果）";
+}
 
-const promtForLevel2Tree = `
+const promtParsePhrases = `
 你是一个只输出 JSON 的解析器。现在对一些字符串条目进行分类或者分解。输入是一个待分解条目的数组；每个条目包含：
 - id: string —— 唯一标识
 - type: "情景" | "谓语" | "宾语" | "介词短语"
@@ -98,6 +119,27 @@ const promtForLevel2Tree = `
 - 无法判断时，将条目分类为"名词短语"然后给出分析结构（允许把原文放入 "值"）。
 - 不要改变输入语义范围。
 `
+async function parsePhraseItems(url, key, items) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key
+    },
+    body: JSON.stringify({
+      model: "deepseek-reasoner",
+      // model: "deepseek-chat",
+      messages: [
+        { role: "system", content: promtParsePhrases },
+        { role: "user", content: "现在请解析这个数组："+JSON.stringify(items, null, 2) }
+      ],
+      response_format: { type: "json_object" },
+    })
+  });
+  const data = await response.json()
+  console.log(data)
+  return data.choices?.[0]?.message?.content || "{\"空\": \"无二级解析结果\"}";
+}
 
 export function useLLM() {
   // state
@@ -137,25 +179,7 @@ export function useLLM() {
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
     try {
-      const response = await fetch(apiUrl.value, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + apiKey.value
-        },
-        body: JSON.stringify({
-          model: "deepseek-reasoner",
-          // model: "deepseek-chat",
-          messages: [
-            { role: "system", content: promtForLevel1Tree },
-            { role: "user", content: "现在请解析这个句子："+inputSentence.value }
-          ],
-          response_format: { type: "json_object" },
-        })
-      });
-      const data = await response.json()
-      console.log(data)
-      jsonTree.value = data.choices?.[0]?.message?.content || "（无一级解析结果）";
+      jsonTree.value = await parseSentence(apiUrl.value, apiKey.value, inputSentence.value)
     } catch (e) {
       console.error(e);
       apiError.value = e?.message || String(e);
@@ -207,25 +231,7 @@ export function useLLM() {
     console.log("items:",items)
 
     try {
-      const response = await fetch(apiUrl.value, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + apiKey.value
-        },
-        body: JSON.stringify({
-          model: "deepseek-reasoner",
-          // model: "deepseek-chat",
-          messages: [
-            { role: "system", content: promtForLevel2Tree },
-            { role: "user", content: "现在请解析这个数组："+JSON.stringify(items, null, 2) }
-          ],
-          response_format: { type: "json_object" },
-        })
-      });
-      const data = await response.json()
-      console.log(data)
-      const content = data.choices?.[0]?.message?.content || "{\"空\": \"无二级解析结果\"}";
+      const content = await parsePhraseItems(apiUrl.value, apiKey.value, items)
       const parsed = JSON.parse(content);
       // const map = new Map();
       // for (const r of (parsed.results || [])) {
@@ -234,7 +240,7 @@ export function useLLM() {
 
       // 暂时存储起来，后续再一并原路插回
       if (parsed["results"]) jsonTreeObj["items"] = parsed["results"]
-      jsonTree.value = JSON.stringify(jsonTreeObj)
+      jsonTree.value = JSON.stringify(jsonTreeObj, null, 2)
       jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
       console.error(e);
