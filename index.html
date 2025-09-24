@@ -259,7 +259,8 @@
                   </template>
                   <template v-else-if="jsonButtonState === 'level1'"> <!-- 框中为一级结构树 -->
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M5 13l4 4L19 7" />
+                      <path d="M5 6l6 6-6 6" />
+                      <path d="M11 6l6 6-6 6" />
                     </svg>
                   </template>
                   <template v-else-if="jsonButtonState === 'level2'"> <!-- 框中为二级结构树 -->
@@ -269,8 +270,7 @@
                   </template>
                   <template v-else-if="jsonButtonState === 'level3'"> <!-- 框中为三级结构树 -->
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M5 6l6 6-6 6" />
-                      <path d="M11 6l6 6-6 6" />
+                      <path d="M5 13l4 4L19 7" />
                     </svg>
                   </template>
                 </button>
