@@ -19,10 +19,10 @@ const promtForLevel1Tree = `
 3) 若无法找到对应部分，用空数组或空字符串，但键必须存在。
 4) 返回的 JSON 顶层必须是一个对象 {}。
 5) 如果有“动宾短语”则将其拆分，动词进入 "谓语"，宾语进入该项的 "宾语列"。
-6) 设定一个【介词白名单】，若句子中的介词有在白名单中的含义，则其短语放入 "介词短语列"；否则请将此介词短语按原句形式放入 "情景列"。
+6) 设定一个【介词白名单】，若句中有介词且其含义与白名单中的相近，则其短语放入 "介词短语列"；否则请将此介词短语按原句形式放入 "情景列"。
 7) 相同介词短语可以被多个谓语共享时，允许在不同谓语项的 "介词短语列" 中重复同一介词短语。
-8) 设定一个【助动词白名单】，若句中的副词、助动词等成分有白名单中的含义，则其作为助动词并入 "谓语" 项；否则请将这个成分按原句形式放入 "情景列"。
-9) 时态信息可通过在谓语中添加助动词来表示。
+8) 设定一个【助动词白名单】，若句中的副词、助动词、情态动词等成分的含义与白名单中的相近，则其作为助动词并入 "谓语" 项；如果不在白名单中但有实际信息（换句话说，不属于功能词），则将这个成分按原句形式放入 "情景列"；若没有实际信息、属于功能词则可舍弃。
+9) 明确提到的时态信息（如“在此刻” “过去”）可通过在谓语中添加助动词来表示，其他的时态信息可忽略。
 
 介词白名单：
 * 使用，利用
@@ -33,7 +33,7 @@ const promtForLevel1Tree = `
 
 助动词白名单：
 * 来，未来，事件
-* 可以，能力，可能性（此条不包含“仅/只有”的含义）
+* 可以，能力，可能性
 * 开始，打开
 * 结束，完成，关闭
 * 知识，了解（如何）
@@ -110,10 +110,30 @@ export function useLLM() {
   const jsonButtonState = ref(jsonParseState.level1)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
-  const jsonLevel2TreeLeaves = ref([])
+  const jsonLevel2TreeLeaves = ref([]);
+  const level1TreeLoadingDuration = ref(0);
+  const level2TreeLoadingDuration = ref(0);
+  let level1TreeLoadingInterval = null;
+  let level2TreeLoadingInterval = null;
+
+  // timer methods
+  function startLoadingTimer(loadingDuration, loadingInterval) {
+    loadingDuration.value = 0;
+    loadingInterval = setInterval(() => {
+      loadingDuration.value++;
+    }, 1000);
+  }
+
+  function stopLoadingTimer(loadingInterval) {
+    if (loadingInterval) {
+      clearInterval(loadingInterval);
+      loadingInterval = null;
+    }
+  }
 
   // methods
   async function parseToLevel1Tree() {
+    startLoadingTimer(level1TreeLoadingDuration, level1TreeLoadingInterval);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
     try {
@@ -141,10 +161,12 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel1TreeLoading.value = false;
+      stopLoadingTimer(level1TreeLoadingInterval);
       console.log('一级结构树解析结束')
     }
   }
   async function parseToLevel2Tree() {
+    startLoadingTimer(level2TreeLoadingDuration, level2TreeLoadingInterval);
     const stcPartType = Object.freeze({
       context: "情景",
       predicate: "谓语",
@@ -185,7 +207,7 @@ export function useLLM() {
     console.log("items:",items)
 
     try {
-        const response = await fetch(apiUrl.value, {
+      const response = await fetch(apiUrl.value, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,13 +225,24 @@ export function useLLM() {
       });
       const data = await response.json()
       console.log(data)
-      // TODO: 原路安插返回的结果
-      jsonTree.value += data.choices?.[0]?.message?.content || "（无二级解析结果）";
+      const content = data.choices?.[0]?.message?.content || "{\"空\": \"无二级解析结果\"}";
+      const parsed = JSON.parse(content);
+      // const map = new Map();
+      // for (const r of (parsed.results || [])) {
+      //   if (r && r.id) map.set(r.id, r);
+      // }
+
+      // 暂时存储起来，后续再一并原路插回
+      if (parsed["results"]) jsonTreeObj["items"] = parsed["results"]
+      jsonTree.value = JSON.stringify(jsonTreeObj)
+      jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
       console.error(e);
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel2TreeLoading.value = false;
+      stopLoadingTimer(level2TreeLoadingInterval);
+      console.log("二级结构树解析结束")
     }
   }
 
@@ -217,6 +250,7 @@ export function useLLM() {
     // state
     apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
     jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+    level1TreeLoadingDuration, level2TreeLoadingDuration,
     // methods
     parseToLevel1Tree, parseToLevel2Tree,
   };

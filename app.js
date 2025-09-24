@@ -16,6 +16,7 @@ createApp({
     const {
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+      level1TreeLoadingDuration, level2TreeLoadingDuration,
       parseToLevel1Tree, parseToLevel2Tree,
     } = useLLM();
 
@@ -31,6 +32,7 @@ createApp({
       // LLM相关
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+      level1TreeLoadingDuration, level2TreeLoadingDuration,
       parseToLevel1Tree, parseToLevel2Tree,
     };
   }
