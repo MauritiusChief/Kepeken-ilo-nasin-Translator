@@ -15,7 +15,8 @@ createApp({
 
     const {
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
-      parseToLevel1Tree,
+      jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+      parseToLevel1Tree, parseToLevel2Tree,
     } = useLLM();
 
     onMounted(() => {
@@ -28,7 +29,9 @@ createApp({
       // 字典相关
       dictRows, searchText, dictLoaded, dictError, sortedRows, filteredRows, loadDefaultDictionary, highlight,
       // LLM相关
-      apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree, parseToLevel1Tree,
+      apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
+      jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+      parseToLevel1Tree, parseToLevel2Tree,
     };
   }
 }).mount('#app');
