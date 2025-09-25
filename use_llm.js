@@ -9,72 +9,56 @@ const jsonParseState = Object.freeze({
 
 const promtParseSentence = `
 你是一个只输出 JSON 的解析器。请将给定中文句子分解为“结构树”，字段包括：
-- "情景列": string[] —— 情景短语的数组（可为空数组）
-- "主语": string —— 句子的主语名词短语
-- "谓语列": { "谓语": string, "宾语列": string[], "介词短语列": string[] }[]
+- "语气助词": string —— 只可为 "转折"、"祈使"、"呼唤"、"感叹" 或空字符串。
+- "情景列": string[] —— 情景或条件短语的数组（可为空数组）。
+- "主语": string —— 句子的主语名词短语。
+- "谓语列": { "谓语": string, "宾语列": string[], "介词短语列": string[] }[] —— 形容词/动词及相关成分。
 
 必须遵守：
-1) 仅输出 JSON（不得包含注释、解释或额外文本）。
-2) 所有键必须使用以上精确的中文命名。
-3) 若无法找到对应部分，用空数组或空字符串，但键必须存在。
-4) 返回的 JSON 顶层必须是一个对象 {}。
-5) 如果有“动宾短语”则将其拆分，动词进入 "谓语"，宾语进入该项的 "宾语列"。
-6) 设定一个【介词白名单】，若句中有介词且其含义与白名单中的相近，则其短语放入 "介词短语列"；否则请将此介词短语按原句形式放入 "情景列"。
-7) 相同介词短语可以被多个谓语共享时，允许在不同谓语项的 "介词短语列" 中重复同一介词短语。
-8) 设定一个【助动词白名单】，若句中的副词、助动词、情态动词等成分的含义与白名单中的相近，则其作为助动词并入 "谓语" 项；如果不在白名单中但有实际信息（换句话说，不属于功能词），则将这个成分按原句形式放入 "情景列"；若没有实际信息、属于功能词则可舍弃。
-9) 明确提到的时态信息（如“在此刻” “过去”）可通过在谓语中添加助动词来表示，其他的时态信息可忽略。
-
-介词白名单：
-* 使用，利用
-* 在，于，真实的，存在
-* 同样，相似，像，兄弟姐妹
-* 来自，因为，原因
-* 向，为了，移动，从……角度看
-
-助动词白名单：
-* 来，未来，事件
-* 可以，能力，可能性
-* 开始，打开
-* 结束，完成，关闭
-* 知识，了解（如何）
-* 想要，需要，渴望
-* 眼睛，看，寻找
-* 保持，停留，持久，保护，继续
-
-示例（仅供格式参考）：
-原句“我的车坏掉了。”：
-{
-  "情景列": [],
-  "主语": "我的车",
-  "谓语列": [
-    { "谓语": "坏掉了", "宾语列": [], "介词短语列": [] }
-  ]
-}
-原句“小孩在房间里玩耍。”：
-{
-  "情景列": [],
-  "主语": "小孩",
-  "谓语列": [
-    { "谓语": "玩耍", "宾语列": [], "介词短语列": ["在房间里"] }
-  ]
-}
-原句“如果停电了，那么这群小伙子就只有在漆黑的宿舍里继续喝酒唱歌了。”：
-{
-  "情景列": ["如果停电了","只有"],
-  "主语": "这群小伙子",
-  "谓语列": [
-    { "谓语": "继续喝", "宾语列": ["酒"], "介词短语列": ["在漆黑的宿舍里"] },
-    { "谓语": "继续唱", "宾语列": ["歌"], "介词短语列": ["在漆黑的宿舍里"] }
-  ]
-}
-原句“如果你品行恶劣，那么你可能面对这个处罚：被踢出这个群组。”：
-{
-  "情景列": ["如果你品行恶劣"],
-  "主语": "你",
-  "谓语列": [
-    { "谓语": "可能面对", "宾语列": ["这个处罚：被踢出这个群组"], "介词短语列": [] }
-  ]
-}
+一、总体要求
+1) 仅输出 JSON，不得包含注释、解释或额外文本。
+2) 所有键必须使用上述精确的中文命名。
+3) 若无法找到对应部分，用空数组 [] 或空字符串 ""，但键必须存在。
+4) 主语 必须是完整的短语，不能漏掉修饰其的成分。
+二、句子拆分流程
+1) 语气助词
+- 根据句尾或句中标记，判断是否为“转折”“祈使”“呼唤”“感叹”，否则为空。
+2) 情景列
+- 包含条件、时间、限制等短语（例如：“如果停电”、“因为天气冷”）。
+- 若句中存在的这些短语不在“语义白名单”范围内，但又带有实际语义，则整体放入 "情景列"。
+3) 主语
+- 确定句子施事者（常为名词短语或代词）。
+- 若存在仅修饰主语的修饰词，则该修饰词视为主语的一部分；若修饰的是谓语或整个句子才放入 "情景列"。
+- 若为祈使句，主语默认是 "你"。
+4) 谓语列
+- 将动词及其助动词放入 "谓语"。
+- 若有并列动词，分别建立多条谓语项。
+- 若存在宾语，从谓语中剥离出来，单独放入 "宾语列"；若存在仅修饰宾语的修饰词，也应视为宾语的一部分。
+- 若有短语命中“介词语义白名单”，则可忽略 "谓语"，优先放入 "介词短语列"。
+- 若出现宾语从句，则整个从句直接放入 "宾语列"，不再细分。
+三、时态处理
+- 若句中明确提到时间或时态（如“此刻”“过去”“明天”），可放入 "情景列" 或用助动语义合并进 "谓语"。
+- 其他隐含的时态信息可忽略。
+四、白名单
+- 判断标准以语义为准。只要成分表达以下语义，就归入相应白名单；即使中文中它本身是动词或连词，也按本规则处理。
+- 若遇到意思近似的表达，也按归一化规则处理。
+1) 介词语义白名单（统一放入 "介词短语列"）
+* 工具/手段（kepeken）：使用，利用，用，借助，通过，以…为手段
+* 地点/存在（lon）：在，于，处于，位于，存在于
+* 相似/比较（sama）：同样，相似，像，如同，类似于
+* 来源/原因（tan）：来自，出自，源自，因为，由于，基于
+* 方向/目的（tawa）：向，对，给，往，为了，以便，从…角度看
+2) 助动语义白名单（出现在动词前时合并进 "谓语"）
+* 未来/趋向（kama）：来，未来，将要
+* 可能/能力（ken）：可以，能，能够，可能
+* 开始/相位起点（kama）：开始，着手，逐步
+* 结束/相位终点（pini）：结束，完成，终止
+* 知识/掌握（sona）：了解（如何），会（如何），学会，掌握
+* 意愿/需求（wile）：想要，需要，渴望，愿意，打算
+* 尝试/探索（alasa/lukin）：寻找，试图，尝试，设法
+* 保持/持续（awen）：保持，停留，持久，继续
+- 若不是语义白名单词，但有实际信息，则放入 "情景列"。
+- 若为功能性虚词（如“就”“便”），则舍弃。
 `
 async function parseSentence(url, key, sentence) {
   const response = await fetch(url, {
@@ -91,14 +75,15 @@ async function parseSentence(url, key, sentence) {
         { role: "user", content: "现在请解析这个句子："+sentence }
       ],
       response_format: { type: "json_object" },
+      max_tokens: 12000,
     })
   });
   const data = await response.json()
   console.log(data)
-  return data.choices?.[0]?.message?.content || "（无一级解析结果）";
+  return data.choices?.[0]?.message?.content || "（无句子解析结果）";
 }
 
-const promtParsePhrases = `
+const promtParseConstituents = `
 你是一个只输出 JSON 的解析器。现在对一些字符串条目进行分类或者分解。输入是一个待分解条目的数组；每个条目包含：
 - id: string —— 唯一标识
 - type: "情景" | "谓语" | "宾语" | "介词短语"
@@ -117,9 +102,33 @@ const promtParsePhrases = `
 - 仅输出 JSON（不得包含额外文本）。
 - 所有输入 id 原样返回
 - 无法判断时，将条目分类为"名词短语"然后给出分析结构（允许把原文放入 "值"）。
-- 不要改变输入语义范围。
 `
-async function parsePhraseItems(url, key, items) {
+async function parseConstituents(url, key, constituents) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key
+    },
+    body: JSON.stringify({
+      model: "deepseek-reasoner",
+      // model: "deepseek-chat",
+      messages: [
+        { role: "system", content: promtParseConstituents },
+        { role: "user", content: "现在请解析这个数组："+JSON.stringify(constituents, null, 2) }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 12000,
+    })
+  });
+  const data = await response.json()
+  console.log(data)
+  return data.choices?.[0]?.message?.content || "{\"空\": \"无成分解析结果\"}";
+}
+
+const promtParsePhrases = `
+`
+async function parsePhrases(url, key, phrases) {
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -131,14 +140,15 @@ async function parsePhraseItems(url, key, items) {
       // model: "deepseek-chat",
       messages: [
         { role: "system", content: promtParsePhrases },
-        { role: "user", content: "现在请解析这个数组："+JSON.stringify(items, null, 2) }
+        { role: "user", content: "现在请解析这个数组："+JSON.stringify(phrases, null, 2) }
       ],
       response_format: { type: "json_object" },
+      max_tokens: 12000,
     })
   });
   const data = await response.json()
   console.log(data)
-  return data.choices?.[0]?.message?.content || "{\"空\": \"无二级解析结果\"}";
+  return data.choices?.[0]?.message?.content || "{\"空\": \"无短语解析结果\"}";
 }
 
 export function useLLM() {
@@ -153,10 +163,10 @@ export function useLLM() {
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const jsonLevel2TreeLeaves = ref([]);
-  const level1TreeLoadingDuration = ref(0);
-  const level2TreeLoadingDuration = ref(0);
-  let level1TreeLoadingInterval = null;
-  let level2TreeLoadingInterval = null;
+  const inputLoadingDuration = ref(0);
+  const jsonLoadingDuration = ref(0);
+  let inputLoadingInterval = null;
+  let jsonLoadingInterval = null;
 
   // timer methods
   function startLoadingTimer(loadingDuration, loadingInterval) {
@@ -175,7 +185,7 @@ export function useLLM() {
 
   // methods
   async function parseToLevel1Tree() {
-    startLoadingTimer(level1TreeLoadingDuration, level1TreeLoadingInterval);
+    startLoadingTimer(inputLoadingDuration, inputLoadingInterval);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
     try {
@@ -185,12 +195,12 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel1TreeLoading.value = false;
-      stopLoadingTimer(level1TreeLoadingInterval);
+      stopLoadingTimer(inputLoadingInterval);
       console.log('一级结构树解析结束')
     }
   }
   async function parseToLevel2Tree() {
-    startLoadingTimer(level2TreeLoadingDuration, level2TreeLoadingInterval);
+    startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
     const stcPartType = Object.freeze({
       context: "情景",
       predicate: "谓语",
@@ -231,7 +241,7 @@ export function useLLM() {
     console.log("items:",items)
 
     try {
-      const content = await parsePhraseItems(apiUrl.value, apiKey.value, items)
+      const content = await parseConstituents(apiUrl.value, apiKey.value, items)
       const parsed = JSON.parse(content);
       // const map = new Map();
       // for (const r of (parsed.results || [])) {
@@ -239,7 +249,7 @@ export function useLLM() {
       // }
 
       // 暂时存储起来，后续再一并原路插回
-      if (parsed["results"]) jsonTreeObj["items"] = parsed["results"]
+      if (parsed.results) jsonTreeObj["成分解析结果"] = parsed.results
       jsonTree.value = JSON.stringify(jsonTreeObj, null, 2)
       jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
@@ -247,16 +257,29 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel2TreeLoading.value = false;
-      stopLoadingTimer(level2TreeLoadingInterval);
+      stopLoadingTimer(jsonLoadingInterval);
       console.log("二级结构树解析结束")
     }
+  }
+  async function parseToLevel3Tree() {
+    const stcPartType = Object.freeze({
+      sentence: "句子",
+      noun_phrase: "名词短语",
+      verv_phrase: "动词短语",
+      subject: "主语",
+    })
+    const items = [];
+    let jsonTreeObj = JSON.parse(jsonTree.value || "{}");
+
+    jsonLevel3TreeLoading.value = true;
+    console.log("三级结构树解析开始")
   }
 
   return {
     // state
     apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
     jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
-    level1TreeLoadingDuration, level2TreeLoadingDuration,
+    inputLoadingDuration, jsonLoadingDuration,
     // methods
     parseToLevel1Tree, parseToLevel2Tree,
   };

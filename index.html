@@ -184,7 +184,7 @@
                   <div class="w-full ">
                     <h2 class="text-base font-semibold">输入</h2>
                     <p class="text-xs text-gray-500 mt-0.5">
-                      <span v-if="jsonLevel1TreeLoading">已解析{{ level1TreeLoadingDuration }}秒</span>
+                      <span v-if="jsonLevel1TreeLoading">已解析{{ inputLoadingDuration }}秒</span>
                       <span v-else>输入要分解的句子</span>
                     </p>
                   </div>
@@ -240,7 +240,7 @@
                 <div class="w-full ">
                   <h2 class="text-base font-semibold">结构树 (JSON)</h2>
                   <p class="text-xs text-gray-500 mt-0.5">
-                      <span v-if="jsonLevel2TreeLoading">已解析{{ level2TreeLoadingDuration }}秒</span>
+                      <span v-if="jsonLevel2TreeLoading">已解析{{ jsonLoadingDuration }}秒</span>
                       <span v-else>可编辑的 JSON 区域</span>
                     </p>
                 </div>
