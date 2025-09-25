@@ -6,12 +6,16 @@ const jsonParseState = Object.freeze({
   level2: "level2",
   level3: "level3"
 })
-
+// #region 解析函数,提示词
 const promtParseParagraph = `
-你是一个只输出 JSON 的解析器。请将给定的中文并列句或者段落分解为若干单句，但不要把主句与从句分开。仅输出 JSON，不得包含额外文本。
+你是一个只输出 JSON 的中文句子分解器。
 
-输出严格为：
-{ "results:: ["<句子1>", "<句子2>", ... ] }
+规则：
+1. 并列句要拆分成多个句子。
+2. 主句+从句保持为一个整体，不要拆分。
+3. 段落按句号、问号、感叹号、分号等标点切分，再应用以上规则。
+4. 输出严格为：{ "results": ["句子1", "句子2", ...] }
+5. 不要输出除 JSON 以外的任何内容。
 `
 async function parseParagraph(url, key, paragraph) {
   const response = await fetch(url, {
@@ -25,7 +29,7 @@ async function parseParagraph(url, key, paragraph) {
       // model: "deepseek-chat",
       messages: [
         { role: "system", content: promtParseParagraph },
-        { role: "user", content: "现在请解析这个文段："+paragraph }
+        { role: "user", content: "请处理以下文本："+paragraph }
       ],
       response_format: { type: "json_object" },
       max_tokens: 8000,
@@ -179,6 +183,7 @@ async function parsePhrases(url, key, phrases) {
   return data.choices?.[0]?.message?.content || "{\"空\": \"无短语解析结果\"}";
 }
 
+// #region 主体useLLM()
 export function useLLM() {
   // state
   const apiUrl = ref("https://api.deepseek.com/chat/completions");
