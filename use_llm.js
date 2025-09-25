@@ -7,6 +7,34 @@ const jsonParseState = Object.freeze({
   level3: "level3"
 })
 
+const promtParseParagraph = `
+你是一个只输出 JSON 的解析器。请将给定的中文并列句或者段落分解为若干单句，但不要把主句与从句分开。仅输出 JSON，不得包含额外文本。
+
+输出严格为：
+{ "results:: ["<句子1>", "<句子2>", ... ] }
+`
+async function parseParagraph(url, key, paragraph) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key
+    },
+    body: JSON.stringify({
+      model: "deepseek-reasoner",
+      // model: "deepseek-chat",
+      messages: [
+        { role: "system", content: promtParseParagraph },
+        { role: "user", content: "现在请解析这个文段："+paragraph }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 8000,
+    })
+  });
+  const data = await response.json()
+  console.log(data)
+  return data.choices?.[0]?.message?.content || "{\"空\": \"无段落解析结果\"}";
+}
 const promtParseSentence = `
 你是一个只输出 JSON 的解析器。请将给定中文句子分解为“结构树”，字段包括：
 - "语气助词": string —— 只可为 "转折"、"祈使"、"呼唤"、"感叹" 或空字符串。
@@ -115,7 +143,7 @@ async function parseConstituents(url, key, constituents) {
       // model: "deepseek-chat",
       messages: [
         { role: "system", content: promtParseConstituents },
-        { role: "user", content: "现在请解析这个数组："+JSON.stringify(constituents, null, 2) }
+        { role: "user", content: "现在请解析这个数组："+JSON.stringify(constituents) }
       ],
       response_format: { type: "json_object" },
       max_tokens: 12000,
@@ -188,15 +216,61 @@ export function useLLM() {
     startLoadingTimer(inputLoadingDuration, inputLoadingInterval);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
+
+    // 先拆分为单句
+    let sentenceList = []
     try {
-      jsonTree.value = await parseSentence(apiUrl.value, apiKey.value, inputSentence.value)
+      const content = await parseParagraph(apiUrl.value, apiKey.value, inputSentence.value);
+      const parsed = JSON.parse(content);
+      if (parsed.results) sentenceList = parsed.results
+      console.log("sentenceList",sentenceList)
+    } catch (e) {
+      console.error(e);
+      apiError.value = e?.message || String(e);
+    }
+
+    // 并发对每个单句进行解析
+    try {
+      // 创建每个句子的解析承诺
+      const parsePromises = sentenceList.map(sentence =>
+        parseSentence(apiUrl.value, apiKey.value, sentence)
+      );
+
+      // 等待所有解析完成
+      const settlements = await Promise.allSettled(parsePromises);
+
+      // 处理解析结果
+      const parsedSentences = settlements.map((settlement, index) => {
+        if (settlement.status === 'fulfilled') {
+          try {
+            // 解析JSON字符串为对象
+            const parsed = JSON.parse(settlement.value);
+            return parsed;
+          } catch (parseError) {
+            // 如果JSON解析失败，返回错误对象
+            return { error: parseError.message, raw: settlement.value, sentence: sentenceList[index] };
+          }
+        } else {
+          // 承诺被拒绝
+          return { error: settlement.reason.message, sentence: sentenceList[index] };
+        }
+      });
+
+      // 设置jsonTree为解析后的句子数组
+      jsonTree.value = JSON.stringify(parsedSentences, null, 2);
+
+      // 检查是否有解析错误
+      const hasErrors = settlements.some(s => s.status === 'rejected');
+      if (hasErrors) {
+        apiError.value = '部分句子解析失败，请查看结果详情。';
+      }
     } catch (e) {
       console.error(e);
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel1TreeLoading.value = false;
       stopLoadingTimer(inputLoadingInterval);
-      console.log('一级结构树解析结束')
+      console.log('一级结构树解析结束');
     }
   }
   async function parseToLevel2Tree() {
