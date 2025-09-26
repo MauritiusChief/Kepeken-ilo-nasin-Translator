@@ -163,7 +163,28 @@ async function parseConstituents(url, key, constituents) {
   return data.choices?.[0]?.message?.content || "{\"空\": \"无成分解析结果\"}";
 }
 
-const promtParsePhrases = `
+const promtParsePhrases = `TODO: 完成提示词
+名词短语需要解析成这样：
+[
+  {
+    "头词": "单词A",
+    "修饰词": ["修饰词A", "修饰词B"], //...
+    "复合修饰词": [
+      {
+        "头词": "单词B",
+        "修饰词": ["修饰词A", "修饰词B"] //...
+      }
+      // {...}...
+    ]
+  }
+  // {...}...
+]
+动词短语需要解析成这样：
+{
+  "前动词": "单词A",
+  "动词": "单词B",
+  "修饰词": ["修饰词A", "修饰词B"] //...
+}
 `
 async function parsePhrases(url, key, phrases) {
   const response = await fetch(url, {
@@ -389,7 +410,11 @@ export function useLLM() {
     }
   }
   async function parseToLevel3Tree() {
-
+    // TODO: 遍历每个句子对象，找出需要解析的{ "类型": "名词短语"|"动词短语"|"句子", "值": "<...>" }
+    // 对于类型为"名词短语"|"动词短语"的，把其"值"类似parseToLevel2Tree函数中那样加入一个array，最终对其array呼叫parsePhrases，然后进行类似parseToLevel2Tree的原路插回（不过parsePhrases返回的array的元素取代的是{ "类型": "名词短语"|"动词短语", "值": "<...>" }这个对象）
+    // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
+    //二级结构树的一个例子：
+    //[{"语气助词":"","情景列":[{"类型":"句子","值":"如果天黑了"}],"主语":"我","谓语列":[{"谓语":{"类型":"动词短语","值":"回"},"宾语列":[{"类型":"名词短语","值":"镇子里"}],"介词短语列":[{"介词":"工具/手段","介词宾语":{"类型":"名词短语","值":"汽车"}}]}]}]
   }
 
   return {
