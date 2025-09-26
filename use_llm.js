@@ -40,6 +40,7 @@ async function parseParagraph(url, key, paragraph) {
   console.log(data)
   return data.choices?.[0]?.message?.content || "{\"空\": \"无段落解析结果\"}";
 }
+
 const promtParseSentence = `
 你是一个只输出 JSON 的解析器。请将给定中文句子分解为“结构树”，字段包括：
 - "语气助词": string —— 只可为 "转折"、"祈使"、"呼唤"、"感叹"、"疑问" 或空字符串。
@@ -119,30 +120,24 @@ async function parseSentence(url, key, sentence) {
 }
 
 const promtParseConstituents = `
-你是一个只输出 JSON 的解析器。现在对一些字符串条目进行分类和分解。输入是一个待分解条目的数组；每个条目包含：
+你是一个只输出 JSON 的解析器。现在对一些字符串条目进行分类。输入是一个待分解条目的数组；每个条目包含：
 - id: string —— 唯一标识
-- type: "情景" | "谓语" | "宾语" | "介词短语"
+- type: "情景" | "谓语" | "宾语" | "介词宾语"
 - text: string —— 原句中的片段
 
 请按以下规则把每个条目转为“分析结构”：
 1) 情景 → { "类型": "名词短语"|"句子", "值": "<...>" }
 2) 谓语 → { "类型": "名词短语"|"动词短语", "值": "<...>" }
 3) 宾语 → { "类型": "名词短语"|"句子", "值": "<...>" }
-4) 介词短语 → { "介词":"<介词语义>", { "类型": "名词短语"|"句子", "值": "<...>" } }
-
-介词语义：判断标准以语义为准，即使中文中它本身是动词或连词，也按本规则处理；若遇到意思近似的表达，也按归一化规则处理。
-* 工具/手段（kepeken）：使用，利用，用，借助，通过，以…为手段
-* 地点/存在（lon）：在，于，处于，位于，存在于
-* 相似/比较（sama）：同样，相似，像，如同，类似于
-* 来源/原因（tan）：来自，出自，源自，因为，由于，基于
-* 方向/目的（tawa）：向，对，给，往，为了，以便，从…角度看
+4) 介词宾语 → { "类型": "名词短语"|"句子", "值": "<...>" }
 
 输出严格为：
 { "results": [ { "id":"...", "type":"...", "parsed": <分析结构> }, ... ] }
 
 必须遵守：
 - 仅输出 JSON（不得包含额外文本）。
-- 所有输入 id 原样返回
+- 所有输入 id 原样返回。
+- 需要时可以在 "值" 中补充名词（如“此事”/“某个东西”）以让语义更显化。
 - 无法判断时，将条目分类为"名词短语"然后给出分析结构（允许把原文放入 "值"）。
 `
 async function parseConstituents(url, key, constituents) {
@@ -294,7 +289,7 @@ export function useLLM() {
       context: "情景",
       predicate: "谓语",
       object: "宾语",
-      prepo_phrase: "介词短语",
+      prepo_object: "介词宾语",
 
       context_list: "情景列",
       predicate_list: "谓语列",
@@ -302,28 +297,37 @@ export function useLLM() {
       prepo_phrase_list: "介词短语列",
     })
     const items = [];
-    let jsonTreeObj = JSON.parse(jsonTree.value || "{}");
+    let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
 
     jsonLevel2TreeLoading.value = true;
     console.log("二级结构树解析开始")
-    // 情景列与情景
-    jsonTreeObj[stcPartType.context_list].forEach((ctx, i) => {
-      items.push({ id: `ctx#${i}`, type: stcPartType.context, text: ctx})
-    })
-    // 谓语列
-    jsonTreeObj[stcPartType.predicate_list].forEach((vp, i) => {
-      // 谓语
-      if (vp[stcPartType.predicate]) {items.push({ id: `pred#${i}`, type: stcPartType.predicate, text: vp[stcPartType.predicate]})}
-      // 宾语列与宾语
-      if (vp[stcPartType.object_list]) {
-        vp[stcPartType.object_list].forEach((obj, j) => {
-          items.push({ id: `obj#${i}#${j}`, type: stcPartType.object, text: obj})
-        })
-      }
-      // 介词短语列与介词短语
-      if (vp[stcPartType.prepo_phrase_list]) {
-        vp[stcPartType.prepo_phrase_list].forEach((pp, j) => {
-          items.push({ id: `pp#${i}#${j}`, type: stcPartType.prepo_phrase, text: pp})
+
+    // 遍历每个句子对象
+    jsonTreeObj.forEach((sentenceObj, s) => {
+      // 情景列与情景
+      sentenceObj[stcPartType.context_list].forEach((ctx, i) => {
+        items.push({ id: `s${s}_ctx#${i}`, type: stcPartType.context, text: ctx})
+      })
+
+      // 谓语列
+      if (sentenceObj[stcPartType.predicate_list]) {
+        sentenceObj[stcPartType.predicate_list].forEach((vp, i) => {
+          // 谓语
+          if (vp[stcPartType.predicate]) {
+            items.push({ id: `s${s}_pred#${i}`, type: stcPartType.predicate, text: vp[stcPartType.predicate]})
+          }
+          // 宾语列与宾语
+          if (vp[stcPartType.object_list]) {
+            vp[stcPartType.object_list].forEach((obj, j) => {
+              items.push({ id: `s${s}_obj#${i}#${j}`, type: stcPartType.object, text: obj})
+            })
+          }
+          // 介词短语列、介词短语、介词宾语
+          if (vp[stcPartType.prepo_phrase_list]) {
+            vp[stcPartType.prepo_phrase_list].forEach((pp, j) => {
+              items.push({ id: `s${s}_pp#${i}#${j}`, type: stcPartType.prepo_object, text: pp[stcPartType.prepo_object]})
+            })
+          }
         })
       }
     })
@@ -338,7 +342,7 @@ export function useLLM() {
       // }
 
       // 暂时存储起来，后续再一并原路插回
-      if (parsed.results) jsonTreeObj["成分解析结果"] = parsed.results
+      if (parsed.results) jsonTreeObj.push(parsed.results)
       jsonTree.value = JSON.stringify(jsonTreeObj, null, 2)
       jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
@@ -351,17 +355,7 @@ export function useLLM() {
     }
   }
   async function parseToLevel3Tree() {
-    const stcPartType = Object.freeze({
-      sentence: "句子",
-      noun_phrase: "名词短语",
-      verv_phrase: "动词短语",
-      subject: "主语",
-    })
-    const items = [];
-    let jsonTreeObj = JSON.parse(jsonTree.value || "{}");
 
-    jsonLevel3TreeLoading.value = true;
-    console.log("三级结构树解析开始")
   }
 
   return {
