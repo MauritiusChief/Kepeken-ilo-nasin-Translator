@@ -336,13 +336,47 @@ export function useLLM() {
     try {
       const content = await parseConstituents(apiUrl.value, apiKey.value, items)
       const parsed = JSON.parse(content);
-      // const map = new Map();
-      // for (const r of (parsed.results || [])) {
-      //   if (r && r.id) map.set(r.id, r);
-      // }
+      const map = new Map();
+      for (const r of (parsed.results || [])) {
+        if (r && r.id) map.set(r.id, r);
+      }
 
-      // 暂时存储起来，后续再一并原路插回
-      if (parsed.results) jsonTreeObj.push(parsed.results)
+      // 插回原句
+      jsonTreeObj.forEach((sentenceObj, s) => {
+        // 情景列，插回情景
+        let contextList = sentenceObj[stcPartType.context_list]
+        sentenceObj[stcPartType.context_list] = contextList.map((ctx, i) => {
+          let id = `s${s}_ctx#${i}`
+          return map.has(id) ? map.get(id).parsed : ctx
+        })
+
+        // 谓语列
+        if (sentenceObj[stcPartType.predicate_list]) {
+          let vpList = sentenceObj[stcPartType.predicate_list] || [];
+          sentenceObj[stcPartType.predicate_list] = vpList.map((vp, i) => {
+            // 插回谓语
+            if (vp[stcPartType.predicate]) {
+              vp[stcPartType.predicate] = map.get(`s${s}_pred#${i}`).parsed
+            }
+            // 宾语列，插回宾语
+            if (vp[stcPartType.object_list]) {
+              let objList = vp[stcPartType.object_list]
+              vp[stcPartType.object_list] = objList.map((obj, j) => {
+                let id = `s${s}_obj#${i}#${j}`;
+                return map.has(id) ? map.get(id).parsed : obj;
+              })
+            }
+            // 介词短语列、介词短语，插回介词宾语
+            if (vp[stcPartType.prepo_phrase_list]) {
+              vp[stcPartType.prepo_phrase_list].forEach((pp, j) => {
+                pp[stcPartType.prepo_object] = map.get(`s${s}_pp#${i}#${j}`).parsed;
+              })
+            }
+            return vp
+          })
+        }
+      })
+
       jsonTree.value = JSON.stringify(jsonTreeObj, null, 2)
       jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
