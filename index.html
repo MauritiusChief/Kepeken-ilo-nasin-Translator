@@ -247,7 +247,7 @@
                 <button
                   class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   type="button"
-                  @click="parseToLevel2Tree"
+                  @click="handleJsonClick"
                   :disabled="jsonLevel2TreeLoading || jsonLevel3TreeLoading || !apiUrl || !apiKey || !jsonTree"
                 >
                   <template v-if="jsonLevel2TreeLoading || jsonLevel3TreeLoading"> <!-- 加载动画 -->
