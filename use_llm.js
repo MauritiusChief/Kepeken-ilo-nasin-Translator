@@ -1,6 +1,6 @@
 import { parseParagraph, parseSentence, parseConstituents, parsePhrases } from "./parse.js"
 
-const { ref } = Vue;
+const { ref, computed } = Vue;
 
 const jsonParseState = Object.freeze({
   level1: "level1",
@@ -17,7 +17,8 @@ export function useLLM() {
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
-  const jsonButtonState = ref(jsonParseState.level1)
+  // const jsonButtonState = ref(jsonParseState.level1)
+  const jsonButtonState = ref(jsonParseState.level2)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const jsonLevel2TreeLeaves = ref([]);
@@ -105,7 +106,7 @@ export function useLLM() {
   }
   async function parseToLevel2Tree() {
     startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
-    const items = [];
+    const constituents = [];
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
 
     jsonLevel2TreeLoading.value = true;
@@ -115,7 +116,7 @@ export function useLLM() {
     jsonTreeObj.forEach((sentenceObj, s) => {
       // 情景列与情景
       sentenceObj["情景列"].forEach((ctx, i) => {
-        items.push({ id: `s${s}_ctx#${i}`, type: "情景", text: ctx})
+        constituents.push({ id: `s${s}_ctx#${i}`, type: "情景", text: ctx})
       })
 
       // 谓语列
@@ -123,27 +124,27 @@ export function useLLM() {
         sentenceObj["谓语列"].forEach((vp, i) => {
           // 谓语
           if (vp["谓语"]) {
-            items.push({ id: `s${s}_pred#${i}`, type: "谓语", text: vp["谓语"]})
+            constituents.push({ id: `s${s}_pred#${i}`, type: "谓语", text: vp["谓语"]})
           }
           // 宾语列与宾语
           if (vp["宾语列"]) {
             vp["宾语列"].forEach((obj, j) => {
-              items.push({ id: `s${s}_obj#${i}#${j}`, type: "宾语", text: obj})
+              constituents.push({ id: `s${s}_obj#${i}#${j}`, type: "宾语", text: obj})
             })
           }
           // 介词短语列、介词短语、介词宾语
           if (vp["介词短语列"]) {
             vp["介词短语列"].forEach((pp, j) => {
-              items.push({ id: `s${s}_pp#${i}#${j}`, type: "介词宾语", text: pp["介词宾语"]})
+              constituents.push({ id: `s${s}_pp#${i}#${j}`, type: "介词宾语", text: pp["介词宾语"]})
             })
           }
         })
       }
     })
-    console.log("items:",items)
+    console.log("constituents:",constituents)
 
     try {
-      const content = await parseConstituents(apiUrl.value, apiKey.value, items)
+      const content = await parseConstituents(apiUrl.value, apiKey.value, constituents)
       const parsed = JSON.parse(content);
       const map = new Map();
       for (const r of (parsed.results || [])) {
@@ -199,10 +200,63 @@ export function useLLM() {
   }
   async function parseToLevel3Tree() {
     startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
+    const phrases = [] // 盛装类型为 "名词短语"|"动词短语" 的item
+    const clauses = [] // 盛装类型为 "句子" 的item
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
 
     jsonLevel3TreeLoading.value = true;
     console.log("三级结构树解析开始")
+
+    // 遍历每个句子对象
+    jsonTreeObj.forEach((sentenceObj, s) => {
+      // 情景列与情景
+      sentenceObj["情景列"].forEach((ctxObj, i) => {
+        let item = { id: `s${s}_ctx#${i}`, type: "情景", kind: ctxObj["类型"], text: ctxObj["值"]}
+        if (ctxObj["类型"] === "名词短语") {
+          phrases.push(item)
+        } else if (ctxObj["类型"] === "句子") {
+          clauses.push(item)
+        }
+      })
+
+      // 主语
+      phrases.push({ id: `s${s}_subj`, type: "主语", kind: "名词短语", text: sentenceObj["主语"]})
+
+      // 谓语列
+      if (sentenceObj["谓语列"]) {
+        sentenceObj["谓语列"].forEach((vp, i) => {
+          // 谓语
+          if (vp["谓语"]) {
+            phrases.push({ id: `s${s}_pred#${i}`, type: "谓语", kind: vp["谓语"]["类型"], text: vp["谓语"]["值"]})
+          }
+          // 宾语列与宾语
+          if (vp["宾语列"]) {
+            vp["宾语列"].forEach((obj, j) => {
+              let item = { id: `s${s}_obj#${i}#${j}`, type: "宾语", kind: obj["类型"], text: obj["值"]}
+              if (obj["类型"] === "名词短语") {
+                phrases.push(item)
+              } else if (obj["类型"] === "句子") {
+                clauses.push(item)
+              }
+            })
+          }
+          // 介词短语列、介词短语、介词宾语
+          if (vp["介词短语列"]) {
+            vp["介词短语列"].forEach((pp, j) => {
+              let item = { id: `s${s}_pp#${i}#${j}`, type: "介词宾语", kind: pp["介词宾语"]["类型"], text: pp["介词宾语"]["值"]}
+              if (pp["介词宾语"]["类型"] === "名词短语") {
+                phrases.push(item)
+              } else if (pp["介词宾语"]["类型"] === "句子") {
+                clauses.push(item)
+              }
+            })
+          }
+        })
+      }
+    })
+    console.log('phrases: ', phrases)
+    console.log('clauses: ', clauses)
+
     // TODO: 遍历每个句子对象，找出需要解析的{ "类型": "名词短语"|"动词短语"|"句子", "值": "<...>" }
     // 对于类型为"名词短语"|"动词短语"的，把其"值"类似parseToLevel2Tree函数中那样加入一个array，最终对其array呼叫parsePhrases，然后进行类似parseToLevel2Tree的原路插回（不过parsePhrases返回的array的元素取代的是{ "类型": "名词短语"|"动词短语", "值": "<...>" }这个对象）
     // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
@@ -223,11 +277,23 @@ export function useLLM() {
     }
   }
 
+  const jsonButtonTitle = computed(() => {
+    if (jsonLevel2TreeLoading.value || jsonLevel3TreeLoading.value) return '正在分析…';
+    switch (jsonButtonState.value) {
+      case 'level1': return '点击以向二级结构树转化';
+      case 'level2': return '点击以向三级结构树转化';
+      case 'level3': return '生成最终结果';
+      default: return '';
+    }
+  });
+
   return {
     // state
     apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
     jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
     inputLoadingDuration, jsonLoadingDuration,
+    // computed
+    jsonButtonTitle,
     // methods
     parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
   };

@@ -17,6 +17,7 @@ createApp({
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
       inputLoadingDuration, jsonLoadingDuration,
+      jsonButtonTitle,
       parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
     } = useLLM();
 
@@ -33,6 +34,7 @@ createApp({
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
       inputLoadingDuration, jsonLoadingDuration,
+      jsonButtonTitle,
       parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
     };
   }
