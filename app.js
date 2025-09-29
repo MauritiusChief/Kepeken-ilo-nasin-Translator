@@ -17,7 +17,7 @@ createApp({
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
       inputLoadingDuration, jsonLoadingDuration,
-      parseToLevel1Tree, parseToLevel2Tree,
+      parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
     } = useLLM();
 
     onMounted(() => {
@@ -33,7 +33,7 @@ createApp({
       apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
       inputLoadingDuration, jsonLoadingDuration,
-      parseToLevel1Tree, parseToLevel2Tree,
+      parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
     };
   }
 }).mount('#app');
