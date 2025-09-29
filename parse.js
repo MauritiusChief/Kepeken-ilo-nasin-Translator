@@ -184,7 +184,7 @@ const promtParsePhrases = `TODO: 完成提示词
 export async function parsePhrases(url, key, phrases) {
   console.log('parsePhrases 触发')
   let placeholders = phrases.map(p => {
-    return {id: p.id, type: p.type, parsed: {"PLACE HOLDER": p.type+p.text}}
+    return {id: p.id, type: p.type, kind: p.kind, parsed: {"PLACE HOLDER": p.kind+p.text}}
   })
   console.log(placeholders)
   return JSON.stringify({ results: placeholders })

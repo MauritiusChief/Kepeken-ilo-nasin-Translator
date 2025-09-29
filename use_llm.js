@@ -104,6 +104,8 @@ export function useLLM() {
       console.log('一级结构树解析结束');
     }
   }
+
+
   async function parseToLevel2Tree() {
     startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
     const constituents = [];
@@ -198,6 +200,8 @@ export function useLLM() {
       console.log("二级结构树解析结束")
     }
   }
+
+
   async function parseToLevel3Tree() {
     startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
     const phrases = [] // 盛装类型为 "名词短语"|"动词短语" 的item
@@ -256,8 +260,19 @@ export function useLLM() {
     })
     console.log('phrases: ', phrases)
     console.log('clauses: ', clauses)
-
     // TODO: 遍历每个句子对象，找出需要解析的{ "类型": "名词短语"|"动词短语"|"句子", "值": "<...>" }
+
+    const phrasesMap = new Map();
+    try {
+      const content = await parsePhrases(apiUrl.value, apiKey.value, phrases)
+      const parsed = JSON.parse(content);
+      for (const r of (parsed.results || [])) {
+        if (r && r.id) phrasesMap.set(r.id, r);
+      }
+    } catch (e) {
+      console.error(e);
+      apiError.value = e?.message || String(e);
+    }
     // 对于类型为"名词短语"|"动词短语"的，把其"值"类似parseToLevel2Tree函数中那样加入一个array，最终对其array呼叫parsePhrases，然后进行类似parseToLevel2Tree的原路插回（不过parsePhrases返回的array的元素取代的是{ "类型": "名词短语"|"动词短语", "值": "<...>" }这个对象）
     // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
     //二级结构树的一个例子：
