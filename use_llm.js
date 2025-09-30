@@ -28,23 +28,25 @@ export function useLLM() {
   let jsonLoadingInterval = null;
 
   // timer methods
-  function startLoadingTimer(loadingDuration, loadingInterval) {
+  function startLoadingTimer(loadingDuration) {
     loadingDuration.value = 0;
-    loadingInterval = setInterval(() => {
+    const intervalId = setInterval(() => {
+      console.log('当前loadingDuration: ', loadingDuration.value);
       loadingDuration.value++;
     }, 1000);
+    return intervalId;
   }
 
-  function stopLoadingTimer(loadingInterval) {
-    if (loadingInterval) {
-      clearInterval(loadingInterval);
-      loadingInterval = null;
+  function stopLoadingTimer(intervalId) {
+    if (intervalId) {
+      clearInterval(intervalId);
     }
+    return null;
   }
 
   // methods
   async function parseToLevel1Tree() {
-    startLoadingTimer(inputLoadingDuration, inputLoadingInterval);
+    inputLoadingInterval = startLoadingTimer(inputLoadingDuration);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
 
@@ -100,14 +102,14 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel1TreeLoading.value = false;
-      stopLoadingTimer(inputLoadingInterval);
+      inputLoadingInterval = stopLoadingTimer(inputLoadingInterval);
       console.log('一级结构树解析结束');
     }
   }
 
 
   async function parseToLevel2Tree() {
-    startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
+    jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const constituents = [];
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
 
@@ -196,14 +198,14 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     } finally {
       jsonLevel2TreeLoading.value = false;
-      stopLoadingTimer(jsonLoadingInterval);
+      jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("二级结构树解析结束")
     }
   }
 
 
   async function parseToLevel3Tree() {
-    startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
+    jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const phrases = [] // 盛装类型为 "名词短语"|"动词短语" 的item
     const clauses = [] // 盛装类型为 "句子" 的item
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
@@ -347,7 +349,7 @@ export function useLLM() {
     //[{"语气助词":"","情景列":[{"类型":"句子","值":"如果天黑了"}],"主语":"我","谓语列":[{"谓语":{"类型":"动词短语","值":"回"},"宾语列":[{"类型":"名词短语","值":"镇子里"}],"介词短语列":[{"介词":"工具/手段","介词宾语":{"类型":"名词短语","值":"汽车"}}]}]}]
 
     jsonLevel3TreeLoading.value = false;
-    stopLoadingTimer(jsonLoadingInterval);
+    jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
     console.log("三级结构树解析结束")
   }
 
