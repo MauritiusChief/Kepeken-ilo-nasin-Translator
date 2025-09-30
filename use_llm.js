@@ -289,8 +289,42 @@ export function useLLM() {
           return { error: settlement.reason.message, sentence: sentenceList[index] };
         }
       });
-      console.log(parsedClauses)
+      console.log('parsedClauses: ',parsedClauses)
 
+      parsedClauses.forEach(parsedClause => {
+        let baseId = parsedClause.id // 本从句所在成分的id
+        // 遍历从句找出需要提取的东西
+        // 情景列与情景
+        parsedClause["情景列"].forEach((ctxObj, i) => {
+          phrases.push({ id: `${baseId}::ctx#${i}`, type: "情景", kind: ctxObj["类型"], text: ctxObj["值"]})
+        })
+
+        // 主语
+        phrases.push({ id: `${baseId}::subj`, type: "主语", kind: "名词短语", text: parsedClause["主语"]})
+
+        // 谓语列
+        if (parsedClause["谓语列"]) {
+          parsedClause["谓语列"].forEach((vp, i) => {
+            // 谓语
+            if (vp["谓语"]) {
+              phrases.push({ id: `${baseId}::pred#${i}`, type: "谓语", kind: vp["谓语"]["类型"], text: vp["谓语"]["值"]})
+            }
+            // 宾语列与宾语
+            if (vp["宾语列"]) {
+              vp["宾语列"].forEach((obj, j) => {
+                phrases.push({ id: `${baseId}::obj#${i}#${j}`, type: "宾语", kind: obj["类型"], text: obj["值"]})
+              })
+            }
+            // 介词短语列、介词短语、介词宾语
+            if (vp["介词短语列"]) {
+              vp["介词短语列"].forEach((pp, j) => {
+                phrases.push({ id: `${baseId}::pp#${i}#${j}`, type: "介词宾语", kind: pp["介词宾语"]["类型"], text: pp["介词宾语"]["值"]})
+              })
+            }
+          })
+        }
+      })
+      console.log('从句解析后的phrases: ', phrases)
     } catch(e) {
       console.error(e);
       apiError.value = e?.message || String(e);
@@ -311,6 +345,10 @@ export function useLLM() {
     // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
     //二级结构树的一个例子：
     //[{"语气助词":"","情景列":[{"类型":"句子","值":"如果天黑了"}],"主语":"我","谓语列":[{"谓语":{"类型":"动词短语","值":"回"},"宾语列":[{"类型":"名词短语","值":"镇子里"}],"介词短语列":[{"介词":"工具/手段","介词宾语":{"类型":"名词短语","值":"汽车"}}]}]}]
+
+    jsonLevel3TreeLoading.value = false;
+    stopLoadingTimer(jsonLoadingInterval);
+    console.log("三级结构树解析结束")
   }
 
   async function handleJsonClick() {
