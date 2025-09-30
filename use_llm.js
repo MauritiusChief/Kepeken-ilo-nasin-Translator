@@ -17,8 +17,8 @@ export function useLLM() {
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
-  // const jsonButtonState = ref(jsonParseState.level1)
-  const jsonButtonState = ref(jsonParseState.level2)
+  const jsonButtonState = ref(jsonParseState.level1)
+  // const jsonButtonState = ref(jsonParseState.level2)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const jsonLevel2TreeLeaves = ref([]);
