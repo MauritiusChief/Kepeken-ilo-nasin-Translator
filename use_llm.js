@@ -1,4 +1,4 @@
-import { parseParagraph, parseSentence, parseConstituents, parsePhrases } from "./parse.js"
+import { parseParagraph, parseSentence, parseConstituents, parseClause, parsePhrases } from "./parse.js"
 
 const { ref, computed } = Vue;
 
@@ -17,8 +17,8 @@ export function useLLM() {
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
-  // const jsonButtonState = ref(jsonParseState.level1)
-  const jsonButtonState = ref(jsonParseState.level2)
+  const jsonButtonState = ref(jsonParseState.level1)
+  // const jsonButtonState = ref(jsonParseState.level2)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const jsonLevel2TreeLeaves = ref([]);
@@ -146,7 +146,7 @@ export function useLLM() {
     console.log("constituents:",constituents)
 
     try {
-      const content = await parseConstituents(apiUrl.value, apiKey.value, constituents)
+      const content = await parseConstituents(apiUrl.value, apiKey.value, inputSentence.value, constituents)
       const parsed = JSON.parse(content);
       const map = new Map();
       for (const r of (parsed.results || [])) {
@@ -211,7 +211,7 @@ export function useLLM() {
     jsonLevel3TreeLoading.value = true;
     console.log("三级结构树解析开始")
 
-    // 遍历每个句子对象
+    // 遍历每个句子对象，找出需要解析的{ "类型": "名词短语"|"动词短语"|"句子", "值": "<...>" }
     jsonTreeObj.forEach((sentenceObj, s) => {
       // 情景列与情景
       sentenceObj["情景列"].forEach((ctxObj, i) => {
@@ -260,11 +260,18 @@ export function useLLM() {
     })
     console.log('phrases: ', phrases)
     console.log('clauses: ', clauses)
-    // TODO: 遍历每个句子对象，找出需要解析的{ "类型": "名词短语"|"动词短语"|"句子", "值": "<...>" }
+
+    // 解析从句，把从句内部的名词短语/动词短语也提取出来
+    try {
+
+    } catch(e) {
+      console.error(e);
+      apiError.value = e?.message || String(e);
+    }
 
     const phrasesMap = new Map();
     try {
-      const content = await parsePhrases(apiUrl.value, apiKey.value, phrases)
+      const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
       const parsed = JSON.parse(content);
       for (const r of (parsed.results || [])) {
         if (r && r.id) phrasesMap.set(r.id, r);
