@@ -295,8 +295,8 @@ export function useLLM() {
         let baseId = parsedClause.id // 本从句所在成分的id
         // 遍历从句找出需要提取的东西
         // 情景列与情景
-        parsedClause["情景列"].forEach((ctxObj, i) => {
-          phrases.push({ id: `${baseId}::ctx#${i}`, type: "情景", kind: ctxObj["类型"], text: ctxObj["值"]})
+        parsedClause["情景列"].forEach((ctx, i) => {
+          phrases.push({ id: `${baseId}::ctx#${i}`, type: "情景", kind: "名词短语", text: ctx})
         })
 
         // 主语
@@ -312,13 +312,13 @@ export function useLLM() {
             // 宾语列与宾语
             if (vp["宾语列"]) {
               vp["宾语列"].forEach((obj, j) => {
-                phrases.push({ id: `${baseId}::obj#${i}#${j}`, type: "宾语", kind: obj["类型"], text: obj["值"]})
+                phrases.push({ id: `${baseId}::obj#${i}#${j}`, type: "宾语", kind: "名词短语", text: obj})
               })
             }
             // 介词短语列、介词短语、介词宾语
             if (vp["介词短语列"]) {
               vp["介词短语列"].forEach((pp, j) => {
-                phrases.push({ id: `${baseId}::pp#${i}#${j}`, type: "介词宾语", kind: pp["介词宾语"]["类型"], text: pp["介词宾语"]["值"]})
+                phrases.push({ id: `${baseId}::pp#${i}#${j}`, type: "介词宾语", kind: "名词短语", text: pp["介词宾语"]})
               })
             }
           })
