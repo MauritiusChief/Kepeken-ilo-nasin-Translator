@@ -17,8 +17,8 @@ export function useLLM() {
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
-  const jsonButtonState = ref(jsonParseState.level1)
-  // const jsonButtonState = ref(jsonParseState.level2)
+  // const jsonButtonState = ref(jsonParseState.level1)
+  const jsonButtonState = ref(jsonParseState.level2)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const jsonLevel2TreeLeaves = ref([]);
@@ -261,8 +261,35 @@ export function useLLM() {
     console.log('phrases: ', phrases)
     console.log('clauses: ', clauses)
 
+    let clausesList = clauses.map(clause => {
+      return {id: clause.id, text: clause.text}
+    })
+    console.log('clausesList: ', clausesList)
+
     // 解析从句，把从句内部的名词短语/动词短语也提取出来
     try {
+      // 创建从句解析承诺
+      const parsePromieses = clausesList.map(clauseObj =>
+        parseClause(apiUrl.value, apiKey.value, clauseObj)
+      )
+      const settlements = await Promise.allSettled(parsePromieses)
+      // 从句解析结果
+      const parsedClauses = settlements.map((settlement, index) => {
+        if (settlement.status === 'fulfilled') {
+          try {
+            // 解析JSON字符串为对象
+            const parsed = JSON.parse(settlement.value);
+            return parsed;
+          } catch (parseError) {
+            // 如果JSON解析失败，返回错误对象
+            return { error: parseError.message, raw: settlement.value, sentence: sentenceList[index] };
+          }
+        } else {
+          // 承诺被拒绝
+          return { error: settlement.reason.message, sentence: sentenceList[index] };
+        }
+      });
+      console.log(parsedClauses)
 
     } catch(e) {
       console.error(e);

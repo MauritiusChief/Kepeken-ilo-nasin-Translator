@@ -159,7 +159,11 @@ export async function parseConstituents(url, key, bgsentence, constituents) {
 }
 
 const promptParseClause = `
-你是一个只输出 JSON 的解析器。请将给定中文句子分解为“结构树”，字段包括：
+你是一个只输出 JSON 的解析器。输入是一个带id的中文句子：
+- "id": string —— 唯一标识。
+- "text": string —— 待分解的中文句子。
+请将输入的中文句子分解为“结构树”，字段包括：
+- "id": string —— 来自输入的唯一标识。
 - "情景列": string[] —— 情景或条件短语的数组（可为空数组）。
 - "主语": string —— 句子的主语名词短语。
 - "谓语列": { "谓语": string, "宾语列": {"类型": string, "值": string }[], "介词短语列": { "介词": string, "介词宾语": string }[] }[] —— 形容词/动词/介词及相关成分。
@@ -167,9 +171,10 @@ const promptParseClause = `
 必须遵守：
 一、总体要求
 1) 仅输出 JSON，不得包含注释、解释或额外文本。
-2) 所有键必须使用上述精确的中文命名。
-3) 若无法找到对应部分，用空数组 [] 或空字符串 ""，但键必须存在。
-4) 主语 必须是完整的短语，不能漏掉修饰其的成分。
+2) 所有输入 id 原样返回。
+3) 所有键必须使用上述精确的中文命名。
+4) 若无法找到对应部分，用空数组 [] 或空字符串 ""，但键必须存在。
+5) 主语 必须是完整的短语，不能漏掉修饰其的成分。
 二、句子拆分流程
 1) 情景列
 - 包含条件、时间、限制等短语。
@@ -219,7 +224,7 @@ export async function parseClause(url, key, clause) {
       // model: "deepseek-chat",
       messages: [
         { role: "system", content: promptParseClause },
-        { role: "user", content: "现在请解析这个句子："+clause }
+        { role: "user", content: "现在请解析这个句子："+JSON.stringify(clause) }
       ],
       response_format: { type: "json_object" },
       max_tokens: 8000,
