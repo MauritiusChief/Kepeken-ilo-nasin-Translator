@@ -335,10 +335,34 @@ export function useLLM() {
     // const phrases = [{"id":"s0_subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pred#0","type":"谓语","kind":"动词短语","text":"轮回"},{"id":"s0_obj#0#0","type":"宾语","kind":"名词短语","text":"百转"},{"id":"s0_pp#0#0::subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pp#0#0::pred#0","type":"谓语","kind":"动词短语","text":"续"},{"id":"s0_pp#0#0::obj#0#0","type":"宾语","kind":"名词短语","text":"前缘"},{"id":"s0_pp#0#0::pp#0#0","type":"介词宾语","kind":"名词短语","text":"你"}]
 
     const phrasesMap = new Map();
+    // 把结构化tokipona词组Object转化为字符串
+    function tokiponaStringBuilder(obj) {
+      function _nounPhrase(obj) {
+        let str = obj["头词"]
+        if (obj["修饰词"].length !== 0) str += (' '+obj["修饰词"].join(' '))
+        if (obj["复合修饰词"].length !== 0) {
+          obj["复合修饰词"].forEach( pi => {
+            str += (' pi '+pi["头词"]+' '+pi["修饰词"].join(' '))
+          })
+        }
+        return str
+      }
+      if (Array.isArray(obj)) { // 为名词短语
+        let nouns = obj.map( nounObj => _nounPhrase(nounObj))
+        return nouns.join(' en ')
+      } else { // 为动词短语
+        let str = obj["动词"]
+        if (obj["前动词"].length !== 0) str = obj["前动词"]+' '+str
+        if (obj["修饰词"].length !== 0) str += (' '+obj["修饰词"].join(' '))
+        return str
+      }
+    }
     try {
       const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
       const parsed = JSON.parse(content);
+      // const parsed = {"results":[{"id":"s0_subj","parsed":[]},{"id":"s0_pred#0","parsed":{"前动词":"","动词":"kama","修饰词":["sin"]}},{"id":"s0_obj#0#0","parsed":[{"头词":"sike","修饰词":["mute"],"复合修饰词":[]}]},{"id":"s0_pp#0#0::subj","parsed":[]},{"id":"s0_pp#0#0::pred#0","parsed":{"前动词":"","动词":"awen","修饰词":[]}},{"id":"s0_pp#0#0::obj#0#0","parsed":[{"头词":"poka","修饰词":[],"复合修饰词":[{"头词":"tenpo","修饰词":["pini"]}]}]},{"id":"s0_pp#0#0::pp#0#0","parsed":[{"头词":"sina","修饰词":[],"复合修饰词":[]}]}]}
       for (const r of (parsed.results || [])) {
+        r.parsed = tokiponaStringBuilder(r.parsed)
         if (r && r.id) phrasesMap.set(r.id, r);
       }
     } catch (e) {
@@ -346,6 +370,7 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     }
     console.log(phrasesMap)
+    // jsonTree.value = Array.from(phrasesMap.values()).map(v => JSON.stringify(v,null,2));
 
     // 对于类型为"名词短语"|"动词短语"的，把其"值"类似parseToLevel2Tree函数中那样加入一个array，最终对其array呼叫parsePhrases，然后进行类似parseToLevel2Tree的原路插回（不过parsePhrases返回的array的元素取代的是{ "类型": "名词短语"|"动词短语", "值": "<...>" }这个对象）
     // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
