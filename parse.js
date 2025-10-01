@@ -234,37 +234,76 @@ export async function parseClause(url, key, clause) {
   return data.choices?.[0]?.message?.content || "{\"空\": \"无从句解析结果\"}";
 }
 
-const promtParsePhrases = `TODO: 完成提示词
-名词短语需要解析成这样：
+const promtParsePhrases = `
+你是一个只输出 JSON 的中文短语 → toki pona 短语翻译解析器，将中文短语翻译和转化“分析结构”。
+输入是一条已经标注类型的短语对象数组，每个条目包含：
+- "id": string —— 唯一标识
+- "type": "情景" | "谓语" | "宾语" | "介词宾语"
+- "kind": "名词短语" | "动词短语",
+- "text": string —— 原句中的片段
+
+若条目的 "kind" 为 "名词短语"，将 "text" 转为此分析结构：
 [
   {
-    "头词": "单词A",
-    "修饰词": ["修饰词A", "修饰词B"], //...
+    "头词": "<toki pona 单词A>",
+    "修饰词": ["<toki pona 单词B>", "..."],
     "复合修饰词": [
       {
-        "头词": "单词B",
-        "修饰词": ["修饰词A", "修饰词B"] //...
-      }
-      // {...}...
+        "头词": "<toki pona 单词C>",
+        "修饰词": ["<toki pona 单词D>", "..."]
+      },
+      {...}...
     ]
-  }
-  // {...}...
+  },
+  {...}...
 ]
-动词短语需要解析成这样：
+名词短语解析原则：
+1. 先整体翻译，得到一个或多个自然的 toki pona 名词短语（允许由多个 toki pona 单词组成）。
+2. 若翻译结果是多个用 en 连接的并列名词短语，则分别建立多条名词项放入数组。
+3. 将翻译结果的中心词（根据 toki pona 的修饰词顺序，应当为短语的第一个单词）提取出来，放入 "头词"。
+4. 将翻译结果中直接修饰 "头词" 的修饰词放入 "修饰词" 数组。
+5. 将翻译结果中的复合修饰词（也就是用次级修饰词修饰的修饰词）提取出来，以类似的前两条原则的形式提取出 "头词" 与 "修饰词" 数组，然后使用 {头词, 修饰词[]} 结构放入 "复合修饰词" 数组。
+6. 不用拘泥于整体翻译时的结果，重点是体现中心词、修饰词与次级修饰词之间的修饰关系。
+
+若条目的 "kind" 为 "动词短语"，将 "text" 转为此分析结构：
 {
-  "前动词": "单词A",
-  "动词": "单词B",
-  "修饰词": ["修饰词A", "修饰词B"] //...
+  "前动词": "<toki pona 单词A>" | "",
+  "动词": "<toki pona 单词B>",
+  "修饰词": ["<toki pona 单词C>", "..."]
 }
+动词短语解析原则：
+1. 先整体翻译，得到自然的 toki pona 动词短语（允许由多个 toki pona 单词组成）。
+2. 若存在，将翻译结果中的符合“助动语义列表”的助动词提取出来，填入 "前动词"。
+3. 将翻译结果的中心动词提取出来填入 "动词"。
+4. 将翻译结果中直接修饰中心动词的修饰词放入 "修饰词" 数组。
+5. 不用拘泥于整体翻译时的结果，重点是体现前动词、中心动词与修饰词之间的修饰关系。
+
+助动语义列表
+* 未来/趋向（kama）：来，未来，将要
+* 可能/能力（ken）：可以，能，能够，可能
+* 开始/相位起点（kama）：开始，着手，逐步
+* 结束/相位终点（pini）：结束，完成，终止
+* 知识/掌握（sona）：了解（如何），会（如何），学会，掌握
+* 意愿/需求（wile）：想要，需要，渴望，愿意，打算
+* 尝试/探索（alasa/lukin）：寻找，试图，尝试，设法
+* 保持/持续（awen）：保持，停留，持久，继续
+
+输出严格为：
+{ "results": [ { "id":"...", "parsed": <分析结构> }, ... ] }
+
+严格规范：
+- 只输出 JSON，不得包含注释或多余文本。
+- 所有输入 id 原样返回。
+- 在最终的输出结果中，所有词必须是单个 toki pona 词（禁止复合词、空格、多词短语）；此限制不施加于解析初期的整体翻译阶段。
+- 不能空缺键；无内容时，用 "" 或 []。
 `
 export async function parsePhrases(url, key, bgsentence, phrases) {
   console.log('parsePhrases 触发')
-  let placeholders = phrases.map(p => {
-    return {id: p.id, type: p.type, kind: p.kind, parsed: {"PLACE HOLDER": p.kind+p.text}}
-  })
-  console.log(placeholders)
-  return JSON.stringify({ results: placeholders })
-
+  // let placeholders = phrases.map(p => {
+  //   return {id: p.id, type: p.type, kind: p.kind, parsed: {"PLACE HOLDER": p.kind+p.text}}
+  // })
+  // console.log(placeholders)
+  // return JSON.stringify({ results: placeholders })
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -276,7 +315,7 @@ export async function parsePhrases(url, key, bgsentence, phrases) {
       // model: "deepseek-chat",
       messages: [
         { role: "system", content: promtParsePhrases },
-        { role: "user", content: "现在请解析这个数组："+JSON.stringify(phrases, null, 2) }
+        { role: "user", content: "短语数组的背景句子："+bgsentence+"\n现在请解析这个数组："+JSON.stringify(phrases) }
       ],
       response_format: { type: "json_object" },
       max_tokens: 12000,

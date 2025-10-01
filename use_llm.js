@@ -31,7 +31,7 @@ export function useLLM() {
   function startLoadingTimer(loadingDuration) {
     loadingDuration.value = 0;
     const intervalId = setInterval(() => {
-      console.log('当前loadingDuration: ', loadingDuration.value);
+      // console.log('当前loadingDuration: ', loadingDuration.value);
       loadingDuration.value++;
     }, 1000);
     return intervalId;
@@ -332,6 +332,8 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     }
 
+    // const phrases = [{"id":"s0_subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pred#0","type":"谓语","kind":"动词短语","text":"轮回"},{"id":"s0_obj#0#0","type":"宾语","kind":"名词短语","text":"百转"},{"id":"s0_pp#0#0::subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pp#0#0::pred#0","type":"谓语","kind":"动词短语","text":"续"},{"id":"s0_pp#0#0::obj#0#0","type":"宾语","kind":"名词短语","text":"前缘"},{"id":"s0_pp#0#0::pp#0#0","type":"介词宾语","kind":"名词短语","text":"你"}]
+
     const phrasesMap = new Map();
     try {
       const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
@@ -343,6 +345,8 @@ export function useLLM() {
       console.error(e);
       apiError.value = e?.message || String(e);
     }
+    console.log(phrasesMap)
+
     // 对于类型为"名词短语"|"动词短语"的，把其"值"类似parseToLevel2Tree函数中那样加入一个array，最终对其array呼叫parsePhrases，然后进行类似parseToLevel2Tree的原路插回（不过parsePhrases返回的array的元素取代的是{ "类型": "名词短语"|"动词短语", "值": "<...>" }这个对象）
     // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
     //二级结构树的一个例子：
