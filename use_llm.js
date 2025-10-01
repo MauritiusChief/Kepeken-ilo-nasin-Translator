@@ -17,11 +17,12 @@ export function useLLM() {
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
+  const resultSentence = ref('此处将会显示最终结果');
   const jsonButtonState = ref(jsonParseState.level1)
   // const jsonButtonState = ref(jsonParseState.level2)
+  // const jsonButtonState = ref(jsonParseState.level3)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
-  const jsonLevel2TreeLeaves = ref([]);
   const inputLoadingDuration = ref(0);
   const jsonLoadingDuration = ref(0);
   let inputLoadingInterval = null;
@@ -336,28 +337,6 @@ export function useLLM() {
     // const phrases = [{"id":"s0_subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pred#0","type":"谓语","kind":"动词短语","text":"轮回"},{"id":"s0_obj#0#0","type":"宾语","kind":"名词短语","text":"百转"},{"id":"s0_pp#0#0::subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pp#0#0::pred#0","type":"谓语","kind":"动词短语","text":"续"},{"id":"s0_pp#0#0::obj#0#0","type":"宾语","kind":"名词短语","text":"前缘"},{"id":"s0_pp#0#0::pp#0#0","type":"介词宾语","kind":"名词短语","text":"你"}]
 
     const phrasesMap = new Map(); // 盛装toki pona翻译过的，所有主句与从句的短语结构
-    // 把结构化tokipona词组Object转化为字符串
-    function tokiponaStringBuilder(obj) {
-      function _nounPhrase(obj) {
-        let str = obj["头词"]
-        if (obj["修饰词"].length !== 0) str += (' '+obj["修饰词"].join(' '))
-        if (obj["复合修饰词"].length !== 0) {
-          obj["复合修饰词"].forEach( pi => {
-            str += (' pi '+pi["头词"]+' '+pi["修饰词"].join(' '))
-          })
-        }
-        return str
-      }
-      if (Array.isArray(obj)) { // 为名词短语
-        let nouns = obj.map( nounObj => _nounPhrase(nounObj))
-        return nouns.join(' en ')
-      } else { // 为动词短语
-        let str = obj["动词"]
-        if (obj["前动词"].length !== 0) str = obj["前动词"]+' '+str
-        if (obj["修饰词"].length !== 0) str += (' '+obj["修饰词"].join(' '))
-        return str
-      }
-    }
     try {
       const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
       const parsed = JSON.parse(content);
@@ -473,7 +452,155 @@ export function useLLM() {
 
 
   async function translateToTokiPona() {
+    const prepoMap = new Map([
+      ["工具/手段", "kepeken"],
+      ["地点/存在", "lon"],
+      ["相似/比较", "sama"],
+      ["来源/原因", "tan"],
+      ["方向/目的", "tawa"],
+    ])
+    const preVerbMap = new Map([
+      ["未来/趋向", "kama"],
+      ["可能/能力", "ken"],
+      ["开始/相位起点", "kama"],
+      ["结束/相位终点", "pini"],
+      ["知识/掌握", "sona"],
+      ["意愿/需求", "wile"],
+      ["尝试/探索", "lukin"],
+      ["保持/持续", "awen"],
+    ])
+    // 把结构化tokipona词组Object转化为字符串
+    function tokiponaStringBuilder(obj) {
+      function _nounPhrase(obj) {
+        let arr = [obj["头词"]]
+        if (obj["修饰词"].length !== 0) arr = [...arr, ' ', ...obj["修饰词"]]
+        if (obj["复合修饰词"].length !== 0) {
+          obj["复合修饰词"].forEach( pi => {
+            arr = [...arr, 'pi', pi["头词"], ...pi["修饰词"]]
+          })
+        }
+        return arr.join(' ')
+      }
+      if (Array.isArray(obj)) { // 为名词短语
+        let nouns = obj.map( nounObj => _nounPhrase(nounObj))
+        return nouns.join(' en ')
+      } else { // 为动词短语
+        let arr = [obj["动词"]]
+        if (obj["前动词"].length !== 0) arr = [obj["前动词"], ...arr]
+        if (obj["修饰词"].length !== 0) arr = [...arr, ...obj["修饰词"]]
+        return arr.join(' ')
+      }
+    }
+    // 从句解析函数
+    function clauseStringBuilder(obj) {
+      let arr = []
+      // 从句情景列
+      if (obj["情景列"].length !== 0) {
+        obj["情景列"].forEach( ctx => {
+          // TODO：未处理情景内数组多个对象的可能
+          arr.push(tokiponaStringBuilder(ctx))
+          arr.push('la')
+        })
+      }
+      // 从句主语
+      arr.push(tokiponaStringBuilder(obj["主语"]))
+      // 从句谓语列
+      if (obj["谓语列"].length !== 0) {
+        let vpArr = ['li']
+        obj["谓语列"].forEach( vp => {
+          // 从句谓语
+          if (vp["谓语"]) {
+            // TODO：未处理谓语内数组多个对象的可能
+            vpArr.push(tokiponaStringBuilder(vp["谓语"]))
+          }
+          // 从句宾语列与宾语
+          if (vp["宾语列"].length !== 0) {
+            vp["宾语列"].forEach( o => {
+              // TODO：未处理宾语内数组多个对象的可能
+              vpArr.push('e')
+              vpArr.push(tokiponaStringBuilder(o))
+            })
+          }
+          // 从句介词短语列、介词短语、介词宾语
+          if (vp["介词短语列"].length !== 0) {
+            vp["介词短语列"].forEach( pp => {
+              // TODO：未处理介词宾语内数组多个对象的可能
+              vpArr.push(prepoMap.get(pp["介词"]))
+              vpArr.push(tokiponaStringBuilder(pp["介词宾语"]))
+            })
+          }
+        })
+        arr = arr.concat(vpArr)
+      }
+      return arr.join(' ')
+    }
 
+    let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
+    // let jsonTreeObj = [{"语气助词":"转折","情景列":[{"情景列":[],"主语":[{"头词":"ike","修饰词":[],"复合修饰词":[]}],"谓语列":[{"谓语":[{"头词":"mute","修饰词":[],"复合修饰词":[]}],"宾语列":[],"介词短语列":[]}]}],"主语":[{"头词":"mi","修饰词":[],"复合修饰词":[]}],"谓语列":[{"谓语":{"前动词":"wile","动词":"utala","修饰词":["awen"]},"宾语列":[],"介词短语列":[{"介词":"工具/手段","介词宾语":[{"头词":"luka","修饰词":["mi","tu"],"复合修饰词":[]}]},{"介词":"工具/手段","介词宾语":[{"头词":"wile","修饰词":["mi"],"复合修饰词":[]}]},{"介词":"方向/目的","介词宾语":[{"头词":"ike","修饰词":[],"复合修饰词":[]}]}]}]}]
+
+    let resultArray = []
+    jsonTreeObj.forEach(sentenceObj => {
+      let arr = []
+      // 情景列
+      if (sentenceObj["情景列"].length !== 0) {
+        sentenceObj["情景列"].forEach( ctx => {
+          if (ctx["主语"]) { // 从句作为情景
+            arr.push(clauseStringBuilder(ctx))
+            arr.push('la,')
+          } else { // 名词短语作为情景
+            // TODO：未处理情景内数组多个对象的可能
+            arr.push(tokiponaStringBuilder(ctx))
+            arr.push('la')
+          }
+        })
+      }
+      // 主语
+      arr.push(tokiponaStringBuilder(sentenceObj["主语"]))
+      // 谓语列
+      if (sentenceObj["谓语列"].length !== 0) {
+        let vpArr = ['li']
+        sentenceObj["谓语列"].forEach( vp => {
+          console.log(vp)
+          // 谓语
+          if (vp["谓语"]) {
+            // TODO：未处理谓语内数组多个对象的可能
+            vpArr.push(tokiponaStringBuilder(vp["谓语"]))
+          }
+          // 宾语列与宾语
+          if (vp["宾语列"].length !== 0) {
+            vp["宾语列"].forEach( o => {
+              if (o["主语"]) { // 从句作为宾语
+                vpArr.push('e ni:')
+                vpArr.push(clauseStringBuilder(o))
+                vpArr.push(',')
+              } else { // 名词短语作为宾语
+                // TODO：未处理宾语内数组多个对象的可能
+                vpArr.push('e')
+                vpArr.push(tokiponaStringBuilder(o))
+              }
+            })
+          }
+          // 介词短语列、介词短语、介词宾语
+          if (vp["介词短语列"].length !== 0) {
+            vp["介词短语列"].forEach( pp => {
+              vpArr.push(prepoMap.get(pp["介词"]))
+              if (pp["介词宾语"]["主语"]) { // 从句作为介词宾语
+                vpArr.push(clauseStringBuilder(pp["介词宾语"]))
+                vpArr.push(',')
+              } else { // 名词短语作为介词宾语
+                // TODO：未处理介词宾语内数组多个对象的可能
+                vpArr.push(tokiponaStringBuilder(pp["介词宾语"]))
+              }
+
+            })
+          }
+        })
+        arr = arr.concat(vpArr)
+      }
+      resultArray.push(arr.join(' '))
+    })
+
+    resultSentence.value = resultArray.join('. ') + '.'
   }
 
   async function handleJsonClick() {
@@ -484,6 +611,9 @@ export function useLLM() {
       case jsonParseState.level2:
         await parseToLevel3Tree()
         break;
+      case jsonParseState.level3:
+        await translateToTokiPona()
+        break
       default:
         break;
     }
@@ -492,17 +622,17 @@ export function useLLM() {
   const jsonButtonTitle = computed(() => {
     if (jsonLevel2TreeLoading.value || jsonLevel3TreeLoading.value) return '正在分析…';
     switch (jsonButtonState.value) {
-      case 'level1': return '点击以向二级结构树转化';
-      case 'level2': return '点击以向三级结构树转化';
-      case 'level3': return '生成最终结果';
+      case jsonParseState.level1: return '点击以向二级结构树转化';
+      case jsonParseState.level2: return '点击以向三级结构树转化';
+      case jsonParseState.level3: return '生成最终结果';
       default: return '';
     }
   });
 
   return {
     // state
-    apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
-    jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+    apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+    jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
     inputLoadingDuration, jsonLoadingDuration,
     // computed
     jsonButtonTitle,
