@@ -72,8 +72,8 @@ export function useLLM() {
 
     // 并发对每个单句进行解析
     try {
-      // 拆成每批最多5个句子
-      const batches = chunkArray(sentenceList, 5)
+      // 拆成每批最多3个句子
+      const batches = chunkArray(sentenceList, 3)
       const allResults = [];
 
       for (const batch of batches) {
@@ -501,16 +501,6 @@ export function useLLM() {
       ["来源/原因", "tan"],
       ["方向/目的", "tawa"],
     ])
-    const preVerbMap = new Map([
-      ["未来/趋向", "kama"],
-      ["可能/能力", "ken"],
-      ["开始/相位起点", "kama"],
-      ["结束/相位终点", "pini"],
-      ["知识/掌握", "sona"],
-      ["意愿/需求", "wile"],
-      ["尝试/探索", "lukin"],
-      ["保持/持续", "awen"],
-    ])
     // 把结构化tokipona词组Object转化为字符串
     function tokiponaStringBuilder(obj) {
       function _nounPhrase(obj) {
@@ -602,8 +592,8 @@ export function useLLM() {
       if (sentenceObj["谓语列"].length !== 0) {
         let noLi = new Set(["mi", "sina"])
         let vpArr = []
-        if (!noLi.has(arr[arr.length-1])) vpArr.push('li') // 若前面不是 mi 或者 sina，才有 li
         sentenceObj["谓语列"].forEach( vp => {
+          if (!noLi.has(arr[arr.length-1])) vpArr.push('li') // 若前面不是 mi 或者 sina，才有 li
           // 谓语
           if (vp["谓语"]) {
             // TODO：未处理谓语内数组多个对象的可能
@@ -628,6 +618,7 @@ export function useLLM() {
             vp["介词短语列"].forEach( pp => {
               vpArr.push(prepoMap.get(pp["介词"]))
               if (pp["介词宾语"]["主语"]) { // 从句作为介词宾语
+                vpArr.push('ni:')
                 vpArr.push(clauseStringBuilder(pp["介词宾语"]))
                 vpArr.push(',')
               } else { // 名词短语作为介词宾语
