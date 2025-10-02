@@ -560,7 +560,6 @@ export function useLLM() {
       if (sentenceObj["谓语列"].length !== 0) {
         let vpArr = ['li']
         sentenceObj["谓语列"].forEach( vp => {
-          console.log(vp)
           // 谓语
           if (vp["谓语"]) {
             // TODO：未处理谓语内数组多个对象的可能
@@ -597,10 +596,32 @@ export function useLLM() {
         })
         arr = arr.concat(vpArr)
       }
-      resultArray.push(arr.join(' '))
+      if (arr[arr.length-1] === ',') arr.pop()
+      let sentenceStr = arr.join(' ')
+      sentenceStr = sentenceStr.replace(' ,', ',')
+      switch (sentenceObj["语气助词"]) {
+          case "转折":
+            sentenceStr = "taso, "+sentenceStr+"."
+            break
+          case "感叹":
+            sentenceStr += " a!"
+            break
+          case "呼唤":
+            sentenceStr += " o!"
+            break
+          case "祈使":
+            sentenceStr = "o "+sentenceStr+"!"
+            break
+          case "疑问":
+            sentenceStr += " anu seme?"
+            break
+          default:
+            sentenceStr += "."
+        }
+      resultArray.push(sentenceStr)
     })
 
-    resultSentence.value = resultArray.join('. ') + '.'
+    resultSentence.value = resultArray.join(' ')
   }
 
   async function handleJsonClick() {
