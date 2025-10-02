@@ -8,6 +8,13 @@ const jsonParseState = Object.freeze({
   level3: "level3"
 })
 
+// 工具：按固定大小切分数组
+function chunkArray(arr, size) {
+  let out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 // #region 主体useLLM()
 export function useLLM() {
   // state
@@ -18,9 +25,9 @@ export function useLLM() {
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
   const resultSentence = ref('此处将会显示最终结果');
-  // const jsonButtonState = ref(jsonParseState.level1)
+  const jsonButtonState = ref(jsonParseState.level1)
   // const jsonButtonState = ref(jsonParseState.level2)
-  const jsonButtonState = ref(jsonParseState.level3)
+  // const jsonButtonState = ref(jsonParseState.level3)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const inputLoadingDuration = ref(0);
@@ -65,36 +72,41 @@ export function useLLM() {
 
     // 并发对每个单句进行解析
     try {
-      // 创建每个句子的解析承诺
-      const parsePromises = sentenceList.map(sentence =>
-        parseSentence(apiUrl.value, apiKey.value, sentence)
-      );
+      // 拆成每批最多5个句子
+      const batches = chunkArray(sentenceList, 5)
+      const allResults = [];
 
-      // 等待所有解析完成
-      const settlements = await Promise.allSettled(parsePromises);
+      for (const batch of batches) {
+        // 当前批次并发请求
+        const settlements = await Promise.allSettled(
+          batch.map(sentence => parseSentence(apiUrl.value, apiKey.value, sentence))
+        );
 
-      // 处理解析结果
-      const parsedSentences = settlements.map((settlement, index) => {
-        if (settlement.status === 'fulfilled') {
-          try {
-            // 解析JSON字符串为对象
-            const parsed = JSON.parse(settlement.value);
-            return parsed;
-          } catch (parseError) {
-            // 如果JSON解析失败，返回错误对象
-            return { error: parseError.message, raw: settlement.value, sentence: sentenceList[index] };
+        // 处理批次解析结果
+        const parsedBatch = settlements.map((settlement, index) => {
+          const sentence = batch[index];
+          if (settlement.status === 'fulfilled') {
+            try {
+              // 解析JSON字符串为对象
+              const parsed = JSON.parse(settlement.value);
+              return parsed;
+            } catch (parseError) {
+              // 如果JSON解析失败，返回错误对象
+              return { error: parseError.message, raw: settlement.value, sentence: sentence };
+            }
+          } else {
+            // 承诺被拒绝
+            return { error: settlement.reason.message, sentence: sentence };
           }
-        } else {
-          // 承诺被拒绝
-          return { error: settlement.reason.message, sentence: sentenceList[index] };
-        }
-      });
+        });
+        allResults.push(...parsedBatch);
+      }
 
       // 设置jsonTree为解析后的句子数组
-      jsonTree.value = JSON.stringify(parsedSentences, null, 2);
+      jsonTree.value = JSON.stringify(allResults, null, 2);
 
       // 检查是否有解析错误
-      const hasErrors = settlements.some(s => s.status === 'rejected');
+      const hasErrors = allResults.some(r => r.error);
       if (hasErrors) {
         apiError.value = '部分句子解析失败，请查看结果详情。';
       }
@@ -286,11 +298,11 @@ export function useLLM() {
             return parsed;
           } catch (parseError) {
             // 如果JSON解析失败，返回错误对象
-            return { error: parseError.message, raw: settlement.value, sentence: sentenceList[index] };
+            return { error: parseError.message, raw: settlement.value, sentence: clausesList[index] };
           }
         } else {
           // 承诺被拒绝
-          return { error: settlement.reason.message, sentence: sentenceList[index] };
+          return { error: settlement.reason.message, sentence: clausesList[index] };
         }
       });
       console.log('parsedClauses: ',parsedClauses)
@@ -338,6 +350,36 @@ export function useLLM() {
 
     const phrasesMap = new Map(); // 盛装toki pona翻译过的，所有主句与从句的短语结构
     try {
+      // const batches = chunkArray(phrases, 10);
+      // // 为每个批次创建一个请求（并发发送）
+      // const parsePromieses = batches.map((batch, idx) =>
+      //   parsePhrases(apiUrl, apiKey, inputSentence, batch)
+      // );
+      // // 并发等待所有批次完成
+      // const settlements = await Promise.allSettled(parsePromieses);
+      // const parsedPhrases = settlements.map((settlement, index) => {
+      //   if (settlement.status === 'fulfilled') {
+      //     try {
+      //       // 解析JSON字符串为对象
+      //       const parsed = JSON.parse(settlement.value);
+      //       return parsed;
+      //     } catch (parseError) {
+      //       // 如果JSON解析失败，返回错误对象
+      //       return { error: parseError.message, raw: settlement.value, sentence: batches[index] };
+      //     }
+      //   } else {
+      //     // 承诺被拒绝
+      //     return { error: settlement.reason.message, sentence: batches[index] };
+      //   }
+      // });
+      // console.log('（所有批次的解析结果）parsedPhrases: ',parsedPhrases)
+      // for (const parsed of (parsedPhrases || [])) {
+      //   for (const r of (parsed.results || [])) {
+      //     // r.parsed = tokiponaStringBuilder(r.parsed)
+      //     if (r && r.id) phrasesMap.set(r.id, r);
+      //   }
+      // }
+      // console.log('phrasesMap: ',phrasesMap)
       const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
       const parsed = JSON.parse(content);
       // const parsed = {"results":[{"id":"s0_subj","parsed":[]},{"id":"s0_pred#0","parsed":{"前动词":"","动词":"kama","修饰词":["sin"]}},{"id":"s0_obj#0#0","parsed":[{"头词":"sike","修饰词":["mute"],"复合修饰词":[]}]},{"id":"s0_pp#0#0::subj","parsed":[]},{"id":"s0_pp#0#0::pred#0","parsed":{"前动词":"","动词":"awen","修饰词":[]}},{"id":"s0_pp#0#0::obj#0#0","parsed":[{"头词":"poka","修饰词":[],"复合修饰词":[{"头词":"tenpo","修饰词":["pini"]}]}]},{"id":"s0_pp#0#0::pp#0#0","parsed":[{"头词":"sina","修饰词":[],"复合修饰词":[]}]}]}
