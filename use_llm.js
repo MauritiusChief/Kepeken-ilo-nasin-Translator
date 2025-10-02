@@ -18,9 +18,9 @@ export function useLLM() {
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
   const resultSentence = ref('此处将会显示最终结果');
-  const jsonButtonState = ref(jsonParseState.level1)
+  // const jsonButtonState = ref(jsonParseState.level1)
   // const jsonButtonState = ref(jsonParseState.level2)
-  // const jsonButtonState = ref(jsonParseState.level3)
+  const jsonButtonState = ref(jsonParseState.level3)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
   const inputLoadingDuration = ref(0);
@@ -558,7 +558,9 @@ export function useLLM() {
       arr.push(tokiponaStringBuilder(sentenceObj["主语"]))
       // 谓语列
       if (sentenceObj["谓语列"].length !== 0) {
-        let vpArr = ['li']
+        let noLi = new Set(["mi", "sina"])
+        let vpArr = []
+        if (!noLi.has(arr[arr.length-1])) vpArr.push('li') // 若前面不是 mi 或者 sina，才有 li
         sentenceObj["谓语列"].forEach( vp => {
           // 谓语
           if (vp["谓语"]) {
