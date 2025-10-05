@@ -57,6 +57,8 @@ export function useLLM() {
     inputLoadingInterval = startLoadingTimer(inputLoadingDuration);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
+    // 想要重新开始的话，再按一次输入框的按钮
+    jsonButtonState.value = jsonParseState.level1
 
     // 先拆分为单句
     let sentenceList = []
@@ -346,47 +348,38 @@ export function useLLM() {
       apiError.value = e?.message || String(e);
     }
 
-    // const phrases = [{"id":"s0_subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pred#0","type":"谓语","kind":"动词短语","text":"轮回"},{"id":"s0_obj#0#0","type":"宾语","kind":"名词短语","text":"百转"},{"id":"s0_pp#0#0::subj","type":"主语","kind":"名词短语","text":""},{"id":"s0_pp#0#0::pred#0","type":"谓语","kind":"动词短语","text":"续"},{"id":"s0_pp#0#0::obj#0#0","type":"宾语","kind":"名词短语","text":"前缘"},{"id":"s0_pp#0#0::pp#0#0","type":"介词宾语","kind":"名词短语","text":"你"}]
-
     const phrasesMap = new Map(); // 盛装toki pona翻译过的，所有主句与从句的短语结构
     try {
-      // const batches = chunkArray(phrases, 10);
-      // // 为每个批次创建一个请求（并发发送）
-      // const parsePromieses = batches.map((batch, idx) =>
-      //   parsePhrases(apiUrl, apiKey, inputSentence, batch)
-      // );
-      // // 并发等待所有批次完成
-      // const settlements = await Promise.allSettled(parsePromieses);
-      // const parsedPhrases = settlements.map((settlement, index) => {
-      //   if (settlement.status === 'fulfilled') {
-      //     try {
-      //       // 解析JSON字符串为对象
-      //       const parsed = JSON.parse(settlement.value);
-      //       return parsed;
-      //     } catch (parseError) {
-      //       // 如果JSON解析失败，返回错误对象
-      //       return { error: parseError.message, raw: settlement.value, sentence: batches[index] };
-      //     }
-      //   } else {
-      //     // 承诺被拒绝
-      //     return { error: settlement.reason.message, sentence: batches[index] };
-      //   }
-      // });
-      // console.log('（所有批次的解析结果）parsedPhrases: ',parsedPhrases)
-      // for (const parsed of (parsedPhrases || [])) {
-      //   for (const r of (parsed.results || [])) {
-      //     // r.parsed = tokiponaStringBuilder(r.parsed)
-      //     if (r && r.id) phrasesMap.set(r.id, r);
-      //   }
-      // }
-      // console.log('phrasesMap: ',phrasesMap)
-      const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
-      const parsed = JSON.parse(content);
-      // const parsed = {"results":[{"id":"s0_subj","parsed":[]},{"id":"s0_pred#0","parsed":{"前动词":"","动词":"kama","修饰词":["sin"]}},{"id":"s0_obj#0#0","parsed":[{"头词":"sike","修饰词":["mute"],"复合修饰词":[]}]},{"id":"s0_pp#0#0::subj","parsed":[]},{"id":"s0_pp#0#0::pred#0","parsed":{"前动词":"","动词":"awen","修饰词":[]}},{"id":"s0_pp#0#0::obj#0#0","parsed":[{"头词":"poka","修饰词":[],"复合修饰词":[{"头词":"tenpo","修饰词":["pini"]}]}]},{"id":"s0_pp#0#0::pp#0#0","parsed":[{"头词":"sina","修饰词":[],"复合修饰词":[]}]}]}
-      for (const r of (parsed.results || [])) {
-        // r.parsed = tokiponaStringBuilder(r.parsed)
-        if (r && r.id) phrasesMap.set(r.id, r);
+      const batches = chunkArray(phrases, 10);
+      // 为每个批次创建一个请求（并发发送）
+      const parsePromieses = batches.map(batch =>
+        parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, batch)
+      );
+      // 并发等待所有批次完成
+      const settlements = await Promise.allSettled(parsePromieses);
+      const parsedPhrases = settlements.map((settlement, index) => {
+        if (settlement.status === 'fulfilled') {
+          try {
+            // 解析JSON字符串为对象
+            const parsed = JSON.parse(settlement.value);
+            return parsed;
+          } catch (parseError) {
+            // 如果JSON解析失败，返回错误对象
+            return { error: parseError.message, raw: settlement.value, sentence: batches[index] };
+          }
+        } else {
+          // 承诺被拒绝
+          return { error: settlement.reason.message, sentence: batches[index] };
+        }
+      });
+      console.log('（所有批次的解析结果）parsedPhrases: ',parsedPhrases)
+      for (const parsed of (parsedPhrases || [])) {
+        for (const r of (parsed.results || [])) {
+          // r.parsed = tokiponaStringBuilder(r.parsed)
+          if (r && r.id) phrasesMap.set(r.id, r);
+        }
       }
+      console.log('phrasesMap: ',phrasesMap)
 
       // 把生成的toki pona结构回插到从句中
       const parsedClausesMap = new Map() // id与其余成分分离的parsedClauses（详见 promptParseClause 中的结构）
@@ -488,8 +481,6 @@ export function useLLM() {
       jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("三级结构树解析结束")
     }
-    // console.log(phrasesMap)
-    // jsonTree.value = Array.from(phrasesMap.values()).map(v => JSON.stringify(v,null,2));
   }
 
 
