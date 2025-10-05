@@ -8,6 +8,13 @@ const jsonParseState = Object.freeze({
   level3: "level3"
 })
 
+const API_STATUS = Object.freeze({
+  idle: 'idle',
+  loading: 'loading',
+  success: 'success',
+  error: 'error',
+});
+
 // 工具：按固定大小切分数组
 function chunkArray(arr, size) {
   let out = [];
@@ -21,6 +28,8 @@ export function useLLM() {
   const apiUrl = ref("https://api.deepseek.com/chat/completions");
   const apiKey = ref('');
   const apiError = ref(null);
+  const apiStatusState = ref(API_STATUS.idle);
+  const apiStatusMessage = ref('未连接');
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
@@ -34,6 +43,15 @@ export function useLLM() {
   const jsonLoadingDuration = ref(0);
   let inputLoadingInterval = null;
   let jsonLoadingInterval = null;
+
+  function setApiStatus(state, message) {
+    apiStatusState.value = state;
+    if (message !== undefined) {
+      apiStatusMessage.value = message;
+    } else if (state === API_STATUS.idle) {
+      apiStatusMessage.value = '未连接';
+    }
+  }
 
   // timer methods
   function startLoadingTimer(loadingDuration) {
@@ -54,6 +72,8 @@ export function useLLM() {
 
   // methods
   async function parseToLevel1Tree() {
+    apiError.value = null;
+    setApiStatus(API_STATUS.loading, '正在解析一级结构树…');
     inputLoadingInterval = startLoadingTimer(inputLoadingDuration);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
@@ -62,6 +82,7 @@ export function useLLM() {
 
     // 先拆分为单句
     let sentenceList = []
+    let allResults = [];
     try {
       const content = await parseParagraph(apiUrl.value, apiKey.value, inputSentence.value);
       const parsed = JSON.parse(content);
@@ -76,7 +97,6 @@ export function useLLM() {
     try {
       // 拆成每批最多3个句子
       const batches = chunkArray(sentenceList, 3)
-      const allResults = [];
 
       for (const batch of batches) {
         // 当前批次并发请求
@@ -120,10 +140,20 @@ export function useLLM() {
       inputLoadingInterval = stopLoadingTimer(inputLoadingInterval);
       console.log('一级结构树解析结束');
     }
+
+    if (apiError.value) {
+      setApiStatus(API_STATUS.error, apiError.value);
+    } else {
+      const total = allResults.length || sentenceList.length || 0;
+      const message = total > 0 ? `已解析 ${total} 句` : '解析完成';
+      setApiStatus(API_STATUS.success, message);
+    }
   }
 
 
   async function parseToLevel2Tree() {
+    apiError.value = null;
+    setApiStatus(API_STATUS.loading, '正在解析二级结构树…');
     jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const constituents = [];
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
@@ -216,10 +246,18 @@ export function useLLM() {
       jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("二级结构树解析结束")
     }
+
+    if (apiError.value) {
+      setApiStatus(API_STATUS.error, apiError.value);
+    } else {
+      setApiStatus(API_STATUS.success, '二级结构树解析完成');
+    }
   }
 
 
   async function parseToLevel3Tree() {
+    apiError.value = null;
+    setApiStatus(API_STATUS.loading, '正在解析三级结构树…');
     jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const phrases = [] // 盛装类型为 "名词短语"|"动词短语" 的item
     const clauses = [] // 盛装类型为 "句子" 的item
@@ -481,6 +519,12 @@ export function useLLM() {
       jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("三级结构树解析结束")
     }
+
+    if (apiError.value) {
+      setApiStatus(API_STATUS.error, apiError.value);
+    } else {
+      setApiStatus(API_STATUS.success, '三级结构树解析完成');
+    }
   }
 
 
@@ -678,12 +722,13 @@ export function useLLM() {
 
   return {
     // state
-    apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+    apiUrl, apiKey, apiError, apiStatusState, apiStatusMessage, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
     jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
     inputLoadingDuration, jsonLoadingDuration,
     // computed
     jsonButtonTitle,
     // methods
     parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
+    setApiStatus,
   };
 }
