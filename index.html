@@ -115,10 +115,36 @@
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-500">API 状态</span>
               <span
-                class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
-                title="占位状态"
+                v-if="apiStatusState === 'loading'"
+                class="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                :title="apiStatusMessage"
               >
-                未连接
+                <svg class="mr-1 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4A4 4 0 008 12H4z"></path>
+                </svg>
+                {{ apiStatusMessage }}
+              </span>
+              <span
+                v-else-if="apiStatusState === 'error'"
+                class="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700"
+                :title="apiStatusMessage"
+              >
+                {{ apiStatusMessage || '请求失败' }}
+              </span>
+              <span
+                v-else-if="apiStatusState === 'success'"
+                class="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700"
+                :title="apiStatusMessage"
+              >
+                {{ apiStatusMessage || '已连接' }}
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
+                :title="apiStatusMessage"
+              >
+                {{ apiStatusMessage || '未连接' }}
               </span>
             </div>
           </div>
@@ -227,7 +253,7 @@
                     class="flex-1 rounded-md border p-3 text-sm bg-gray-50 overflow-auto"
                   >
                     <p class="text-gray-500">
-                      结果占位：等待结构树与生成逻辑接入…
+                      {{resultSentence}}
                     </p>
                   </div>
                 </div>

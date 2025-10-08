@@ -8,106 +8,153 @@ const jsonParseState = Object.freeze({
   level3: "level3"
 })
 
+const API_STATUS = Object.freeze({
+  idle: 'idle',
+  loading: 'loading',
+  success: 'success',
+  error: 'error',
+});
+
+// 工具：按固定大小切分数组
+function chunkArray(arr, size) {
+  let out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 // #region 主体useLLM()
 export function useLLM() {
   // state
   const apiUrl = ref("https://api.deepseek.com/chat/completions");
   const apiKey = ref('');
-  const apiError = ref(null);
+  const apiStatusState = ref(API_STATUS.idle);
+  const apiStatusMessage = ref('未连接');
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
+  const resultSentence = ref('此处将会显示最终结果');
   const jsonButtonState = ref(jsonParseState.level1)
   // const jsonButtonState = ref(jsonParseState.level2)
+  // const jsonButtonState = ref(jsonParseState.level3)
   const jsonLevel2TreeLoading = ref(false);
   const jsonLevel3TreeLoading = ref(false);
-  const jsonLevel2TreeLeaves = ref([]);
   const inputLoadingDuration = ref(0);
   const jsonLoadingDuration = ref(0);
   let inputLoadingInterval = null;
   let jsonLoadingInterval = null;
+  let apiError = ''
 
-  // timer methods
-  function startLoadingTimer(loadingDuration, loadingInterval) {
-    loadingDuration.value = 0;
-    loadingInterval = setInterval(() => {
-      loadingDuration.value++;
-    }, 1000);
+  function setApiStatus(state, message) {
+    apiStatusState.value = state;
+    if (message !== undefined) {
+      apiStatusMessage.value = message;
+    } else if (state === API_STATUS.idle) {
+      apiStatusMessage.value = '未连接';
+    }
   }
 
-  function stopLoadingTimer(loadingInterval) {
-    if (loadingInterval) {
-      clearInterval(loadingInterval);
-      loadingInterval = null;
+  // timer methods
+  function startLoadingTimer(loadingDuration) {
+    loadingDuration.value = 0;
+    const intervalId = setInterval(() => {
+      // console.log('当前loadingDuration: ', loadingDuration.value);
+      loadingDuration.value++;
+    }, 1000);
+    return intervalId;
+  }
+
+  function stopLoadingTimer(intervalId) {
+    if (intervalId) {
+      clearInterval(intervalId);
     }
+    return null;
   }
 
   // methods
   async function parseToLevel1Tree() {
-    startLoadingTimer(inputLoadingDuration, inputLoadingInterval);
+    apiError = '';
+    setApiStatus(API_STATUS.loading, '正在解析一级结构树…');
+    inputLoadingInterval = startLoadingTimer(inputLoadingDuration);
     jsonLevel1TreeLoading.value = true;
     console.log('一级结构树解析开始')
+    // 想要重新开始的话，再按一次输入框的按钮
+    jsonButtonState.value = jsonParseState.level1
 
     // 先拆分为单句
     let sentenceList = []
+    let allResults = [];
     try {
       const content = await parseParagraph(apiUrl.value, apiKey.value, inputSentence.value);
       const parsed = JSON.parse(content);
       if (parsed.results) sentenceList = parsed.results
       console.log("sentenceList",sentenceList)
+      setApiStatus(API_STATUS.loading, `正在解析 ${sentenceList.length} 个句子`);
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     }
 
     // 并发对每个单句进行解析
     try {
-      // 创建每个句子的解析承诺
-      const parsePromises = sentenceList.map(sentence =>
-        parseSentence(apiUrl.value, apiKey.value, sentence)
-      );
+      // 拆成每批最多3个句子
+      const batches = chunkArray(sentenceList, 3)
 
-      // 等待所有解析完成
-      const settlements = await Promise.allSettled(parsePromises);
+      for (const batch of batches) {
+        setApiStatus(API_STATUS.loading, `已返回：${allResults.length}/${sentenceList.length}`)
+        // 当前批次并发请求
+        const settlements = await Promise.allSettled(
+          batch.map(sentence => parseSentence(apiUrl.value, apiKey.value, sentence))
+        );
 
-      // 处理解析结果
-      const parsedSentences = settlements.map((settlement, index) => {
-        if (settlement.status === 'fulfilled') {
-          try {
-            // 解析JSON字符串为对象
-            const parsed = JSON.parse(settlement.value);
-            return parsed;
-          } catch (parseError) {
-            // 如果JSON解析失败，返回错误对象
-            return { error: parseError.message, raw: settlement.value, sentence: sentenceList[index] };
+        // 处理批次解析结果
+        const parsedBatch = settlements.map((settlement, index) => {
+          const sentence = batch[index];
+          if (settlement.status === 'fulfilled') {
+            try {
+              // 解析JSON字符串为对象
+              const parsed = JSON.parse(settlement.value);
+              return parsed;
+            } catch (parseError) {
+              // 如果JSON解析失败，返回错误对象
+              return { error: parseError.message, raw: settlement.value, sentence: sentence };
+            }
+          } else {
+            // 承诺被拒绝
+            return { error: settlement.reason.message, sentence: sentence };
           }
-        } else {
-          // 承诺被拒绝
-          return { error: settlement.reason.message, sentence: sentenceList[index] };
-        }
-      });
+        });
+        allResults.push(...parsedBatch);
+      }
 
       // 设置jsonTree为解析后的句子数组
-      jsonTree.value = JSON.stringify(parsedSentences, null, 2);
+      jsonTree.value = JSON.stringify(allResults, null, 2);
 
       // 检查是否有解析错误
-      const hasErrors = settlements.some(s => s.status === 'rejected');
-      if (hasErrors) {
-        apiError.value = '部分句子解析失败，请查看结果详情。';
+      const errorResults = allResults.filter(r => r.error);
+      if (errorResults.length > 0) {
+        apiError = `部分句子解析失败：${errorResults.length}/${sentenceList.length}`;
       }
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     } finally {
       jsonLevel1TreeLoading.value = false;
-      stopLoadingTimer(inputLoadingInterval);
+      inputLoadingInterval = stopLoadingTimer(inputLoadingInterval);
       console.log('一级结构树解析结束');
+    }
+
+    if (apiError) {
+      setApiStatus(API_STATUS.error, apiError);
+    } else {
+      setApiStatus(API_STATUS.success, `已解析 ${sentenceList.length} 个句子`);
     }
   }
 
 
   async function parseToLevel2Tree() {
-    startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
+    apiError = '';
+    setApiStatus(API_STATUS.loading, '正在解析二级结构树…');
+    jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const constituents = [];
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
 
@@ -144,6 +191,7 @@ export function useLLM() {
       }
     })
     console.log("constituents:",constituents)
+    setApiStatus(API_STATUS.loading, `正在解析 ${constituents.length} 个成分`);
 
     try {
       const content = await parseConstituents(apiUrl.value, apiKey.value, inputSentence.value, constituents)
@@ -193,17 +241,25 @@ export function useLLM() {
       jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     } finally {
       jsonLevel2TreeLoading.value = false;
-      stopLoadingTimer(jsonLoadingInterval);
+      jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("二级结构树解析结束")
+    }
+
+    if (apiError) {
+      setApiStatus(API_STATUS.error, apiError);
+    } else {
+      setApiStatus(API_STATUS.success, `已解析 ${constituents.length} 个成分`);
     }
   }
 
 
   async function parseToLevel3Tree() {
-    startLoadingTimer(jsonLoadingDuration, jsonLoadingInterval);
+    apiError = '';
+    setApiStatus(API_STATUS.loading, '正在解析三级结构树…');
+    jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const phrases = [] // 盛装类型为 "名词短语"|"动词短语" 的item
     const clauses = [] // 盛装类型为 "句子" 的item
     let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
@@ -260,6 +316,7 @@ export function useLLM() {
     })
     console.log('phrases: ', phrases)
     console.log('clauses: ', clauses)
+    setApiStatus(API_STATUS.loading, `正在解析 ${phrases.length} 个短语， ${clauses.length} 个从句`);
 
     let clausesList = clauses.map(clause => {
       return {id: clause.id, text: clause.text}
@@ -267,6 +324,7 @@ export function useLLM() {
     console.log('clausesList: ', clausesList)
 
     // 解析从句，把从句内部的名词短语/动词短语也提取出来
+    let parsedClauses = [] // 盛装解析出来的结构化的从句
     try {
       // 创建从句解析承诺
       const parsePromieses = clausesList.map(clauseObj =>
@@ -274,7 +332,7 @@ export function useLLM() {
       )
       const settlements = await Promise.allSettled(parsePromieses)
       // 从句解析结果
-      const parsedClauses = settlements.map((settlement, index) => {
+      parsedClauses = settlements.map((settlement, index) => {
         if (settlement.status === 'fulfilled') {
           try {
             // 解析JSON字符串为对象
@@ -282,11 +340,11 @@ export function useLLM() {
             return parsed;
           } catch (parseError) {
             // 如果JSON解析失败，返回错误对象
-            return { error: parseError.message, raw: settlement.value, sentence: sentenceList[index] };
+            return { error: parseError.message, raw: settlement.value, sentence: clausesList[index] };
           }
         } else {
           // 承诺被拒绝
-          return { error: settlement.reason.message, sentence: sentenceList[index] };
+          return { error: settlement.reason.message, sentence: clausesList[index] };
         }
       });
       console.log('parsedClauses: ',parsedClauses)
@@ -325,30 +383,320 @@ export function useLLM() {
         }
       })
       console.log('从句解析后的phrases: ', phrases)
+      setApiStatus(API_STATUS.loading, `正在解析 ${phrases.length} 个短语（ 来自 ${clauses.length} 个从句）`);
     } catch(e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     }
 
-    const phrasesMap = new Map();
+    const phrasesMap = new Map(); // 盛装toki pona翻译过的，所有主句与从句的短语结构
     try {
-      const content = await parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, phrases)
-      const parsed = JSON.parse(content);
-      for (const r of (parsed.results || [])) {
-        if (r && r.id) phrasesMap.set(r.id, r);
+      const batches = chunkArray(phrases, 10);
+      // 为每个批次创建一个请求（并发发送）
+      const parsePromieses = batches.map(batch =>
+        parsePhrases(apiUrl.value, apiKey.value, inputSentence.value, batch)
+      );
+      // 并发等待所有批次完成
+      const settlements = await Promise.allSettled(parsePromieses);
+      const parsedPhrases = settlements.map((settlement, index) => {
+        if (settlement.status === 'fulfilled') {
+          try {
+            // 解析JSON字符串为对象
+            const parsed = JSON.parse(settlement.value);
+            return parsed;
+          } catch (parseError) {
+            // 如果JSON解析失败，返回错误对象
+            return { error: parseError.message, raw: settlement.value, sentence: batches[index] };
+          }
+        } else {
+          // 承诺被拒绝
+          return { error: settlement.reason.message, sentence: batches[index] };
+        }
+      });
+      console.log('（所有批次的解析结果）parsedPhrases: ',parsedPhrases)
+      for (const parsed of (parsedPhrases || [])) {
+        for (const r of (parsed.results || [])) {
+          // r.parsed = tokiponaStringBuilder(r.parsed)
+          if (r && r.id) phrasesMap.set(r.id, r);
+        }
       }
+      console.log('phrasesMap: ',phrasesMap)
+
+      // 把生成的toki pona结构回插到从句中
+      const parsedClausesMap = new Map() // id与其余成分分离的parsedClauses（详见 promptParseClause 中的结构）
+      parsedClauses.forEach(parsedClause => {
+        let baseId = parsedClause.id // 本从句所在成分的id
+        let parsedClauseObj = {} // 将被存储到map中的结构
+        // 情景列，插回情景
+        let contextList = parsedClause["情景列"]
+        parsedClauseObj["情景列"] = contextList.map((ctx, i) => {
+          let id = `${baseId}::ctx#${i}`
+          return phrasesMap.has(id) ? phrasesMap.get(id).parsed : ctx
+        })
+
+        // 主语
+        parsedClauseObj["主语"] = phrasesMap.get(`${baseId}::subj`).parsed
+
+        // 谓语列
+        if (parsedClause["谓语列"]) {
+          let vpList = parsedClause["谓语列"] || [];
+          parsedClauseObj["谓语列"] = vpList.map((vp, i) => {
+            // 插回谓语
+            if (vp["谓语"]) {
+              vp["谓语"] = phrasesMap.get(`${baseId}::pred#${i}`).parsed
+            }
+            // 宾语列，插回宾语
+            if (vp["宾语列"]) {
+              let objList = vp["宾语列"]
+              vp["宾语列"] = objList.map((obj, j) => {
+                let id = `${baseId}::obj#${i}#${j}`;
+                return phrasesMap.has(id) ? phrasesMap.get(id).parsed : obj;
+              })
+            }
+            // 介词短语列、介词短语，插回介词宾语
+            if (vp["介词短语列"]) {
+              vp["介词短语列"].forEach((pp, j) => {
+                pp["介词宾语"] = phrasesMap.get(`${baseId}::pp#${i}#${j}`).parsed;
+              })
+            }
+            return vp
+          })
+        }
+
+        parsedClausesMap.set(baseId, parsedClauseObj)
+      })
+      console.log('parsedClausesMap: ', parsedClausesMap)
+
+      // 把生成的toki pona结构与从句回插到原位，作为三级结构树
+      jsonTreeObj.forEach((sentenceObj, s) => {
+        // 情景列，插回情景
+        let contextList = sentenceObj["情景列"]
+        sentenceObj["情景列"] = contextList.map((ctx, i) => {
+          let id = `s${s}_ctx#${i}`
+          if (phrasesMap.has(id)) return phrasesMap.get(id).parsed
+          if (parsedClausesMap.has(id)) return parsedClausesMap.get(id)
+          return ctx
+        })
+
+        // 主语，主语不存在从句的情况
+        sentenceObj["主语"] = phrasesMap.get(`s${s}_subj`).parsed
+
+        // 谓语列
+        if (sentenceObj["谓语列"]) {
+          let vpList = sentenceObj["谓语列"] || [];
+          sentenceObj["谓语列"] = vpList.map((vp, i) => {
+            // 插回谓语，谓语不存在从句的情况
+            if (vp["谓语"]) {
+              vp["谓语"] = phrasesMap.get(`s${s}_pred#${i}`).parsed
+            }
+            // 宾语列，插回宾语
+            if (vp["宾语列"]) {
+              let objList = vp["宾语列"]
+              vp["宾语列"] = objList.map((obj, j) => {
+                let id = `s${s}_obj#${i}#${j}`;
+                if (phrasesMap.has(id)) return phrasesMap.get(id).parsed
+                if (parsedClausesMap.has(id)) return parsedClausesMap.get(id)
+                return obj
+              })
+            }
+            // 介词短语列、介词短语，插回介词宾语
+            if (vp["介词短语列"]) {
+              vp["介词短语列"].forEach((pp, j) => {
+                let ppId = `s${s}_pp#${i}#${j}`
+                if (phrasesMap.has(ppId)) pp["介词宾语"] = phrasesMap.get(ppId).parsed;
+                if (parsedClausesMap.has(ppId)) pp["介词宾语"] = parsedClausesMap.get(ppId);
+              })
+            }
+            return vp
+          })
+        }
+      });
+
+      jsonTree.value = JSON.stringify(jsonTreeObj, null, 2)
+      jsonButtonState.value = jsonParseState.level3;
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
+    } finally {
+      jsonLevel3TreeLoading.value = false;
+      jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
+      console.log("三级结构树解析结束")
     }
-    // 对于类型为"名词短语"|"动词短语"的，把其"值"类似parseToLevel2Tree函数中那样加入一个array，最终对其array呼叫parsePhrases，然后进行类似parseToLevel2Tree的原路插回（不过parsePhrases返回的array的元素取代的是{ "类型": "名词短语"|"动词短语", "值": "<...>" }这个对象）
-    // 对于类型为"句子"的，通过Promise.allSettled进行并发的parseSentence。对返回的结果也类似地呼叫parseConstituents，但解析出来的"句子"类型全部换成"名词短语"。然后就是同样的对"名词短语"|"动词短语"的处理。
-    //二级结构树的一个例子：
-    //[{"语气助词":"","情景列":[{"类型":"句子","值":"如果天黑了"}],"主语":"我","谓语列":[{"谓语":{"类型":"动词短语","值":"回"},"宾语列":[{"类型":"名词短语","值":"镇子里"}],"介词短语列":[{"介词":"工具/手段","介词宾语":{"类型":"名词短语","值":"汽车"}}]}]}]
 
-    jsonLevel3TreeLoading.value = false;
-    stopLoadingTimer(jsonLoadingInterval);
-    console.log("三级结构树解析结束")
+    if (apiError) {
+      setApiStatus(API_STATUS.error, apiError);
+    } else {
+      setApiStatus(API_STATUS.success, '三级结构树解析完成');
+    }
+  }
+
+
+  async function translateToTokiPona() {
+    const prepoMap = new Map([
+      ["工具/手段", "kepeken"],
+      ["地点/存在", "lon"],
+      ["相似/比较", "sama"],
+      ["来源/原因", "tan"],
+      ["方向/目的", "tawa"],
+    ])
+    // 把结构化tokipona词组Object转化为字符串
+    function tokiponaStringBuilder(obj) {
+      function _nounPhrase(obj) {
+        let arr = [obj["头词"]]
+        if (obj["修饰词"].length !== 0) arr = [...arr, ' ', ...obj["修饰词"]]
+        if (obj["复合修饰词"].length !== 0) {
+          obj["复合修饰词"].forEach( pi => {
+            arr = [...arr, 'pi', pi["头词"], ...pi["修饰词"]]
+          })
+        }
+        return arr.join(' ')
+      }
+      if (Array.isArray(obj)) { // 为名词短语
+        let nouns = obj.map( nounObj => _nounPhrase(nounObj))
+        return nouns.join(' en ')
+      } else { // 为动词短语
+        let arr = [obj["动词"]]
+        if (obj["前动词"].length !== 0) arr = [obj["前动词"], ...arr]
+        if (obj["修饰词"].length !== 0) arr = [...arr, ...obj["修饰词"]]
+        return arr.join(' ')
+      }
+    }
+    // 从句解析函数
+    function clauseStringBuilder(obj) {
+      let arr = []
+      // 从句情景列
+      if (obj["情景列"].length !== 0) {
+        obj["情景列"].forEach( ctx => {
+          // TODO：未处理情景内数组多个对象的可能
+          arr.push(tokiponaStringBuilder(ctx))
+          arr.push('la')
+        })
+      }
+      // 从句主语
+      arr.push(tokiponaStringBuilder(obj["主语"]))
+      // 从句谓语列
+      if (obj["谓语列"].length !== 0) {
+        let vpArr = ['li']
+        obj["谓语列"].forEach( vp => {
+          // 从句谓语
+          if (vp["谓语"]) {
+            // TODO：未处理谓语内数组多个对象的可能
+            vpArr.push(tokiponaStringBuilder(vp["谓语"]))
+          }
+          // 从句宾语列与宾语
+          if (vp["宾语列"].length !== 0) {
+            vp["宾语列"].forEach( o => {
+              // TODO：未处理宾语内数组多个对象的可能
+              vpArr.push('e')
+              vpArr.push(tokiponaStringBuilder(o))
+            })
+          }
+          // 从句介词短语列、介词短语、介词宾语
+          if (vp["介词短语列"].length !== 0) {
+            vp["介词短语列"].forEach( pp => {
+              // TODO：未处理介词宾语内数组多个对象的可能
+              vpArr.push(prepoMap.get(pp["介词"]))
+              vpArr.push(tokiponaStringBuilder(pp["介词宾语"]))
+            })
+          }
+        })
+        arr = arr.concat(vpArr)
+      }
+      return arr.join(' ')
+    }
+
+    let jsonTreeObj = JSON.parse(jsonTree.value || "[]");
+    // let jsonTreeObj = [{"语气助词":"转折","情景列":[{"情景列":[],"主语":[{"头词":"ike","修饰词":[],"复合修饰词":[]}],"谓语列":[{"谓语":[{"头词":"mute","修饰词":[],"复合修饰词":[]}],"宾语列":[],"介词短语列":[]}]}],"主语":[{"头词":"mi","修饰词":[],"复合修饰词":[]}],"谓语列":[{"谓语":{"前动词":"wile","动词":"utala","修饰词":["awen"]},"宾语列":[],"介词短语列":[{"介词":"工具/手段","介词宾语":[{"头词":"luka","修饰词":["mi","tu"],"复合修饰词":[]}]},{"介词":"工具/手段","介词宾语":[{"头词":"wile","修饰词":["mi"],"复合修饰词":[]}]},{"介词":"方向/目的","介词宾语":[{"头词":"ike","修饰词":[],"复合修饰词":[]}]}]}]}]
+
+    let resultArray = []
+    jsonTreeObj.forEach(sentenceObj => {
+      let laArr = []
+      let arr = []
+      // 情景列
+      if (sentenceObj["情景列"].length !== 0) {
+        sentenceObj["情景列"].forEach( ctx => {
+          if (ctx["主语"]) { // 从句作为情景
+            laArr.push(clauseStringBuilder(ctx))
+            laArr.push('la,')
+          } else { // 名词短语作为情景
+            // TODO：未处理情景内数组多个对象的可能
+            laArr.push(tokiponaStringBuilder(ctx))
+            laArr.push('la')
+          }
+        })
+      }
+      // 主语
+      arr.push(tokiponaStringBuilder(sentenceObj["主语"]))
+      // 谓语列
+      if (sentenceObj["谓语列"].length !== 0) {
+        let noLi = new Set(["mi", "sina"])
+        let vpArr = []
+        sentenceObj["谓语列"].forEach( vp => {
+          if (!noLi.has(arr[arr.length-1])) vpArr.push('li') // 若前面不是 mi 或者 sina，才有 li
+          // 谓语
+          if (vp["谓语"]) {
+            // TODO：未处理谓语内数组多个对象的可能
+            vpArr.push(tokiponaStringBuilder(vp["谓语"]))
+          }
+          // 宾语列与宾语
+          if (vp["宾语列"].length !== 0) {
+            vp["宾语列"].forEach( o => {
+              if (o["主语"]) { // 从句作为宾语
+                vpArr.push('e ni:')
+                vpArr.push(clauseStringBuilder(o))
+                vpArr.push(',')
+              } else { // 名词短语作为宾语
+                // TODO：未处理宾语内数组多个对象的可能
+                vpArr.push('e')
+                vpArr.push(tokiponaStringBuilder(o))
+              }
+            })
+          }
+          // 介词短语列、介词短语、介词宾语
+          if (vp["介词短语列"].length !== 0) {
+            vp["介词短语列"].forEach( pp => {
+              vpArr.push(prepoMap.get(pp["介词"]))
+              if (pp["介词宾语"]["主语"]) { // 从句作为介词宾语
+                vpArr.push('ni:')
+                vpArr.push(clauseStringBuilder(pp["介词宾语"]))
+                vpArr.push(',')
+              } else { // 名词短语作为介词宾语
+                // TODO：未处理介词宾语内数组多个对象的可能
+                vpArr.push(tokiponaStringBuilder(pp["介词宾语"]))
+              }
+
+            })
+          }
+        })
+        arr = arr.concat(vpArr)
+      }
+      if (arr[arr.length-1] === ',') arr.pop()
+      let laStr = laArr.join(' ')
+      let sentenceStr = arr.join(' ')
+      sentenceStr = sentenceStr.replace(' ,', ',')
+      switch (sentenceObj["语气助词"]) {
+          case "转折":
+            sentenceStr = laStr+", taso, "+sentenceStr+"."
+            break
+          case "感叹":
+            sentenceStr = laStr+" "+sentenceStr+" a!"
+            break
+          case "呼唤":
+            sentenceStr = laStr+" "+sentenceStr+" o!"
+            break
+          case "祈使":
+            sentenceStr = laStr+" o "+sentenceStr+"!"
+            break
+          case "疑问":
+            sentenceStr = laStr+" "+sentenceStr+" anu seme?"
+            break
+          default:
+            sentenceStr = laStr+" "+sentenceStr+"."
+        }
+      resultArray.push(sentenceStr)
+    })
+
+    resultSentence.value = resultArray.join('\n')
   }
 
   async function handleJsonClick() {
@@ -359,6 +707,9 @@ export function useLLM() {
       case jsonParseState.level2:
         await parseToLevel3Tree()
         break;
+      case jsonParseState.level3:
+        await translateToTokiPona()
+        break
       default:
         break;
     }
@@ -367,21 +718,22 @@ export function useLLM() {
   const jsonButtonTitle = computed(() => {
     if (jsonLevel2TreeLoading.value || jsonLevel3TreeLoading.value) return '正在分析…';
     switch (jsonButtonState.value) {
-      case 'level1': return '点击以向二级结构树转化';
-      case 'level2': return '点击以向三级结构树转化';
-      case 'level3': return '生成最终结果';
+      case jsonParseState.level1: return '点击以向二级结构树转化';
+      case jsonParseState.level2: return '点击以向三级结构树转化';
+      case jsonParseState.level3: return '生成最终结果';
       default: return '';
     }
   });
 
   return {
     // state
-    apiUrl, apiKey, apiError, inputSentence, jsonLevel1TreeLoading, jsonTree,
-    jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading, jsonLevel2TreeLeaves,
+    apiUrl, apiKey, apiStatusState, apiStatusMessage, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+    jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
     inputLoadingDuration, jsonLoadingDuration,
     // computed
     jsonButtonTitle,
     // methods
     parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
+    setApiStatus,
   };
 }
