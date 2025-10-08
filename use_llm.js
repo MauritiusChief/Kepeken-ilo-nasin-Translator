@@ -610,17 +610,18 @@ export function useLLM() {
 
     let resultArray = []
     jsonTreeObj.forEach(sentenceObj => {
+      let laArr = []
       let arr = []
       // 情景列
       if (sentenceObj["情景列"].length !== 0) {
         sentenceObj["情景列"].forEach( ctx => {
           if (ctx["主语"]) { // 从句作为情景
-            arr.push(clauseStringBuilder(ctx))
-            arr.push('la,')
+            laArr.push(clauseStringBuilder(ctx))
+            laArr.push('la,')
           } else { // 名词短语作为情景
             // TODO：未处理情景内数组多个对象的可能
-            arr.push(tokiponaStringBuilder(ctx))
-            arr.push('la')
+            laArr.push(tokiponaStringBuilder(ctx))
+            laArr.push('la')
           }
         })
       }
@@ -670,31 +671,32 @@ export function useLLM() {
         arr = arr.concat(vpArr)
       }
       if (arr[arr.length-1] === ',') arr.pop()
+      let laStr = laArr.join(' ')
       let sentenceStr = arr.join(' ')
       sentenceStr = sentenceStr.replace(' ,', ',')
       switch (sentenceObj["语气助词"]) {
           case "转折":
-            sentenceStr = "taso, "+sentenceStr+"."
+            sentenceStr = laStr+", taso, "+sentenceStr+"."
             break
           case "感叹":
-            sentenceStr += " a!"
+            sentenceStr = laStr+" "+sentenceStr+" a!"
             break
           case "呼唤":
-            sentenceStr += " o!"
+            sentenceStr = laStr+" "+sentenceStr+" o!"
             break
           case "祈使":
-            sentenceStr = "o "+sentenceStr+"!"
+            sentenceStr = laStr+" o "+sentenceStr+"!"
             break
           case "疑问":
-            sentenceStr += " anu seme?"
+            sentenceStr = laStr+" "+sentenceStr+" anu seme?"
             break
           default:
-            sentenceStr += "."
+            sentenceStr = laStr+" "+sentenceStr+"."
         }
       resultArray.push(sentenceStr)
     })
 
-    resultSentence.value = resultArray.join(' ')
+    resultSentence.value = resultArray.join('\n')
   }
 
   async function handleJsonClick() {
