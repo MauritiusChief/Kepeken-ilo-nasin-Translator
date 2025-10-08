@@ -27,7 +27,6 @@ export function useLLM() {
   // state
   const apiUrl = ref("https://api.deepseek.com/chat/completions");
   const apiKey = ref('');
-  const apiError = ref(null);
   const apiStatusState = ref(API_STATUS.idle);
   const apiStatusMessage = ref('未连接');
   const inputSentence = ref('');
@@ -43,6 +42,7 @@ export function useLLM() {
   const jsonLoadingDuration = ref(0);
   let inputLoadingInterval = null;
   let jsonLoadingInterval = null;
+  let apiError = ''
 
   function setApiStatus(state, message) {
     apiStatusState.value = state;
@@ -72,7 +72,7 @@ export function useLLM() {
 
   // methods
   async function parseToLevel1Tree() {
-    apiError.value = null;
+    apiError = '';
     setApiStatus(API_STATUS.loading, '正在解析一级结构树…');
     inputLoadingInterval = startLoadingTimer(inputLoadingDuration);
     jsonLevel1TreeLoading.value = true;
@@ -88,9 +88,10 @@ export function useLLM() {
       const parsed = JSON.parse(content);
       if (parsed.results) sentenceList = parsed.results
       console.log("sentenceList",sentenceList)
+      setApiStatus(API_STATUS.loading, `正在解析 ${sentenceList.length} 个句子`);
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     }
 
     // 并发对每个单句进行解析
@@ -99,6 +100,7 @@ export function useLLM() {
       const batches = chunkArray(sentenceList, 3)
 
       for (const batch of batches) {
+        setApiStatus(API_STATUS.loading, `已返回：${allResults.length}/${sentenceList.length}`)
         // 当前批次并发请求
         const settlements = await Promise.allSettled(
           batch.map(sentence => parseSentence(apiUrl.value, apiKey.value, sentence))
@@ -128,31 +130,29 @@ export function useLLM() {
       jsonTree.value = JSON.stringify(allResults, null, 2);
 
       // 检查是否有解析错误
-      const hasErrors = allResults.some(r => r.error);
-      if (hasErrors) {
-        apiError.value = '部分句子解析失败，请查看结果详情。';
+      const errorResults = allResults.filter(r => r.error);
+      if (errorResults.length > 0) {
+        apiError = `部分句子解析失败：${errorResults.length}/${sentenceList.length}`;
       }
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     } finally {
       jsonLevel1TreeLoading.value = false;
       inputLoadingInterval = stopLoadingTimer(inputLoadingInterval);
       console.log('一级结构树解析结束');
     }
 
-    if (apiError.value) {
-      setApiStatus(API_STATUS.error, apiError.value);
+    if (apiError) {
+      setApiStatus(API_STATUS.error, apiError);
     } else {
-      const total = allResults.length || sentenceList.length || 0;
-      const message = total > 0 ? `已解析 ${total} 句` : '解析完成';
-      setApiStatus(API_STATUS.success, message);
+      setApiStatus(API_STATUS.success, `已解析 ${sentenceList.length} 个句子`);
     }
   }
 
 
   async function parseToLevel2Tree() {
-    apiError.value = null;
+    apiError = '';
     setApiStatus(API_STATUS.loading, '正在解析二级结构树…');
     jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const constituents = [];
@@ -191,6 +191,7 @@ export function useLLM() {
       }
     })
     console.log("constituents:",constituents)
+    setApiStatus(API_STATUS.loading, `正在解析 ${constituents.length} 个成分`);
 
     try {
       const content = await parseConstituents(apiUrl.value, apiKey.value, inputSentence.value, constituents)
@@ -240,23 +241,23 @@ export function useLLM() {
       jsonButtonState.value = jsonParseState.level2;
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     } finally {
       jsonLevel2TreeLoading.value = false;
       jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("二级结构树解析结束")
     }
 
-    if (apiError.value) {
-      setApiStatus(API_STATUS.error, apiError.value);
+    if (apiError) {
+      setApiStatus(API_STATUS.error, apiError);
     } else {
-      setApiStatus(API_STATUS.success, '二级结构树解析完成');
+      setApiStatus(API_STATUS.success, `已解析 ${constituents.length} 个成分`);
     }
   }
 
 
   async function parseToLevel3Tree() {
-    apiError.value = null;
+    apiError = '';
     setApiStatus(API_STATUS.loading, '正在解析三级结构树…');
     jsonLoadingInterval = startLoadingTimer(jsonLoadingDuration);
     const phrases = [] // 盛装类型为 "名词短语"|"动词短语" 的item
@@ -315,6 +316,7 @@ export function useLLM() {
     })
     console.log('phrases: ', phrases)
     console.log('clauses: ', clauses)
+    setApiStatus(API_STATUS.loading, `正在解析 ${phrases.length} 个短语， ${clauses.length} 个从句`);
 
     let clausesList = clauses.map(clause => {
       return {id: clause.id, text: clause.text}
@@ -381,9 +383,10 @@ export function useLLM() {
         }
       })
       console.log('从句解析后的phrases: ', phrases)
+      setApiStatus(API_STATUS.loading, `正在解析 ${phrases.length} 个短语（ 来自 ${clauses.length} 个从句）`);
     } catch(e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     }
 
     const phrasesMap = new Map(); // 盛装toki pona翻译过的，所有主句与从句的短语结构
@@ -513,15 +516,15 @@ export function useLLM() {
       jsonButtonState.value = jsonParseState.level3;
     } catch (e) {
       console.error(e);
-      apiError.value = e?.message || String(e);
+      apiError = e?.message || String(e);
     } finally {
       jsonLevel3TreeLoading.value = false;
       jsonLoadingInterval = stopLoadingTimer(jsonLoadingInterval);
       console.log("三级结构树解析结束")
     }
 
-    if (apiError.value) {
-      setApiStatus(API_STATUS.error, apiError.value);
+    if (apiError) {
+      setApiStatus(API_STATUS.error, apiError);
     } else {
       setApiStatus(API_STATUS.success, '三级结构树解析完成');
     }
@@ -722,7 +725,7 @@ export function useLLM() {
 
   return {
     // state
-    apiUrl, apiKey, apiError, apiStatusState, apiStatusMessage, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+    apiUrl, apiKey, apiStatusState, apiStatusMessage, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
     jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
     inputLoadingDuration, jsonLoadingDuration,
     // computed

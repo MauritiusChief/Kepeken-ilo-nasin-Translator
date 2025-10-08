@@ -14,7 +14,7 @@ createApp({
     } = useDictionary();
 
     const {
-      apiUrl, apiKey, apiError, apiStatusState, apiStatusMessage, setApiStatus,
+      apiUrl, apiKey, apiStatusState, apiStatusMessage, setApiStatus,
       inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
       inputLoadingDuration, jsonLoadingDuration,
@@ -32,7 +32,7 @@ createApp({
       // 字典相关
       dictRows, searchText, dictLoaded, dictError, sortedRows, filteredRows, loadDefaultDictionary, highlight,
       // LLM相关
-      apiUrl, apiKey, apiError, apiStatusState, apiStatusMessage, setApiStatus,
+      apiUrl, apiKey, apiStatusState, apiStatusMessage, setApiStatus,
       inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
       inputLoadingDuration, jsonLoadingDuration,
