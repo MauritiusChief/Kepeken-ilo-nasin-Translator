@@ -112,6 +112,8 @@
                 未加载
               </span>
             </div>
+            <!-- API 状态 -->
+            <!-- TODO: 改为结构树中总体情况的描述，比如“1个请求失败” -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-500">API 状态</span>
               <span
@@ -210,6 +212,7 @@
                   <div class="w-full ">
                     <h2 class="text-base font-semibold">输入</h2>
                     <p class="text-xs text-gray-500 mt-0.5">
+                      <!-- TODO: 不再区分一二三级结构树 -->
                       <span v-if="jsonLevel1TreeLoading">已解析{{ inputLoadingDuration }}秒</span>
                       <span v-else>输入要分解的句子，请勿输入过于复杂（从句套从句）的句子。</span>
                     </p>
@@ -261,6 +264,7 @@
             </section>
 
             <!-- 右列：代码框（JSON 结构树） -->
+            <!-- TODO: 不再区分一二三级结构树，也不再直接使用JSON，而是使用可以互动的UI式结构树 -->
             <section class="rounded-2xl border bg-white p-4 flex flex-col min-h-[60vh]">
               <div class="mb-2 flex gap-2">
                 <div class="w-full ">
@@ -270,6 +274,8 @@
                       <span v-else>可编辑的 JSON 区域</span>
                     </p>
                 </div>
+                <!-- TODO: 这个按钮的功能改成一次性点击结构树中所有可点击的“发送”按钮。可点击的“发送”按钮参照旧的一二三级结构树决定。 -->
+                 <!-- 比方说，总共4个句子，其中两个已解析，还差两个按钮没点或者点过但失败了，那就只点击这两个按钮。 -->
                 <button
                   class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   type="button"
@@ -303,6 +309,7 @@
                   </template>
                 </button>
               </div>
+              <!-- TODO: 文本区完全改掉，做成可互动的UI式结构树 -->
               <textarea
                 v-model="jsonTree"
                 class="code-box flex-1 rounded-md border px-3 py-2 text-sm resize-none font-mono leading-5"
