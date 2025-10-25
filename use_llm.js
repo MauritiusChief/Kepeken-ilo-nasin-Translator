@@ -1,6 +1,6 @@
 import { parseParagraph, parseSentence, parseConstituents, parseClause, parsePhrases } from "./parse.js"
 
-const { ref, computed } = Vue;
+const { ref, computed, watch } = Vue;
 
 const jsonParseState = Object.freeze({
   level1: "level1",
@@ -32,6 +32,7 @@ export function useLLM() {
   const inputSentence = ref('');
   const jsonLevel1TreeLoading = ref(false);
   const jsonTree = ref('');
+  const structureTree = ref([]);
   const resultSentence = ref('此处将会显示最终结果');
   const jsonButtonState = ref(jsonParseState.level1)
   // const jsonButtonState = ref(jsonParseState.level2)
@@ -71,6 +72,126 @@ export function useLLM() {
   }
 
   // methods
+  function createStructureEntry(raw = {}, index = 0) {
+    const makeId = () => {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return `entry-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
+    };
+    const normalized = (raw && typeof raw === 'object' && !Array.isArray(raw))
+      ? raw
+      : { 情景: '', 主语: '', 其他: typeof raw === 'string' ? raw : '' };
+    return {
+      id: normalized.id || makeId(),
+      情景: normalized?.情景 || '',
+      主语: normalized?.主语 || '',
+      其他: normalized?.其他 || '',
+      expanded: false,
+      sending: false,
+      elapsed: 0,
+      _timer: null,
+    };
+  }
+
+  function stripStructureEntry(entry) {
+    return {
+      情景: entry.情景,
+      主语: entry.主语,
+      其他: entry.其他,
+    };
+  }
+
+  function clearStructureTree() {
+    structureTree.value.forEach(entry => {
+      if (entry._timer) {
+        clearInterval(entry._timer);
+        entry._timer = null;
+      }
+    });
+    structureTree.value = [];
+  }
+
+  function setStructureTree(results = []) {
+    clearStructureTree();
+    structureTree.value = results.map((item, index) => createStructureEntry(item, index));
+    jsonTree.value = JSON.stringify(structureTree.value.map(stripStructureEntry), null, 2);
+  }
+
+  function startEntryTimer(entry) {
+    if (entry._timer) clearInterval(entry._timer);
+    entry.elapsed = 0;
+    entry._timer = setInterval(() => {
+      entry.elapsed += 1;
+    }, 1000);
+  }
+
+  function stopEntryTimer(entry) {
+    if (entry._timer) {
+      clearInterval(entry._timer);
+      entry._timer = null;
+    }
+    entry.elapsed = 0;
+  }
+
+  function toggleStructureRow(id) {
+    const entry = structureTree.value.find(item => item.id === id);
+    if (!entry) return;
+    entry.expanded = !entry.expanded;
+  }
+
+  function addStructureRow() {
+    const nextIndex = structureTree.value.length;
+    structureTree.value.push(createStructureEntry({}, nextIndex));
+  }
+
+  function removeStructureRow(id) {
+    const index = structureTree.value.findIndex(item => item.id === id);
+    if (index === -1) return;
+    stopEntryTimer(structureTree.value[index]);
+    structureTree.value.splice(index, 1);
+    jsonTree.value = JSON.stringify(structureTree.value.map(stripStructureEntry), null, 2);
+  }
+
+  function truncateText(text = '', limit = 6) {
+    if (!text) return '';
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit)}…`;
+  }
+
+  function structureRowSummary(entry) {
+    const parts = [entry.情景, entry.主语, entry.其他]
+      .map(value => (value ? truncateText(value.trim()) : '空'));
+    return parts.join('，');
+  }
+
+  function canSendStructureRow(entry) {
+    return Boolean(entry.情景.trim() || entry.主语.trim() || entry.其他.trim());
+  }
+
+  async function sendStructureRow(id) {
+    const entry = structureTree.value.find(item => item.id === id);
+    if (!entry || entry.sending || !canSendStructureRow(entry)) return;
+    entry.sending = true;
+    startEntryTimer(entry);
+    apiError = '';
+    setApiStatus(API_STATUS.loading, '正在发送结构树条目…');
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setApiStatus(API_STATUS.success, '结构树条目发送完成');
+    } catch (e) {
+      apiError = e?.message || String(e);
+      setApiStatus(API_STATUS.error, apiError);
+    } finally {
+      entry.sending = false;
+      stopEntryTimer(entry);
+    }
+  }
+
+  watch(structureTree, (newValue) => {
+    jsonTree.value = JSON.stringify(newValue.map(stripStructureEntry), null, 2);
+  }, { deep: true });
+
   async function parseToLevel1Tree() {
     apiError = '';
     setApiStatus(API_STATUS.loading, '正在解析一级结构树…');
@@ -83,68 +204,80 @@ export function useLLM() {
     // 先拆分为单句
     let sentenceList = []
     let allResults = [];
+    let skipSentenceParsing = false;
     try {
       const content = await parseParagraph(apiUrl.value, apiKey.value, inputSentence.value);
       const parsed = JSON.parse(content);
-      if (parsed.results) sentenceList = parsed.results
+      if (Array.isArray(parsed.results)) {
+        sentenceList = parsed.results;
+      }
       console.log("sentenceList",sentenceList)
+      setStructureTree(sentenceList);
+      if (sentenceList.every(item => item && typeof item === 'object' && !Array.isArray(item))) {
+        skipSentenceParsing = true;
+      }
       setApiStatus(API_STATUS.loading, `正在解析 ${sentenceList.length} 个句子`);
     } catch (e) {
       console.error(e);
       apiError = e?.message || String(e);
     }
 
-    // 并发对每个单句进行解析
-    try {
-      // 拆成每批最多3个句子
-      const batches = chunkArray(sentenceList, 3)
+    if (!skipSentenceParsing) {
+      try {
+        // 拆成每批最多3个句子
+        const batches = chunkArray(sentenceList, 3)
 
-      for (const batch of batches) {
-        setApiStatus(API_STATUS.loading, `已返回：${allResults.length}/${sentenceList.length}`)
-        // 当前批次并发请求
-        const settlements = await Promise.allSettled(
-          batch.map(sentence => parseSentence(apiUrl.value, apiKey.value, sentence))
-        );
+        for (const batch of batches) {
+          setApiStatus(API_STATUS.loading, `已返回：${allResults.length}/${sentenceList.length}`)
+          // 当前批次并发请求
+          const settlements = await Promise.allSettled(
+            batch.map(sentence => parseSentence(apiUrl.value, apiKey.value, sentence))
+          );
 
-        // 处理批次解析结果
-        const parsedBatch = settlements.map((settlement, index) => {
-          const sentence = batch[index];
-          if (settlement.status === 'fulfilled') {
-            try {
-              // 解析JSON字符串为对象
-              const parsed = JSON.parse(settlement.value);
-              return parsed;
-            } catch (parseError) {
-              // 如果JSON解析失败，返回错误对象
-              return { error: parseError.message, raw: settlement.value, sentence: sentence };
+          // 处理批次解析结果
+          const parsedBatch = settlements.map((settlement, index) => {
+            const sentence = batch[index];
+            if (settlement.status === 'fulfilled') {
+              try {
+                // 解析JSON字符串为对象
+                const parsed = JSON.parse(settlement.value);
+                return parsed;
+              } catch (parseError) {
+                // 如果JSON解析失败，返回错误对象
+                return { error: parseError.message, raw: settlement.value, sentence: sentence };
+              }
+            } else {
+              // 承诺被拒绝
+              return { error: settlement.reason.message, sentence: sentence };
             }
-          } else {
-            // 承诺被拒绝
-            return { error: settlement.reason.message, sentence: sentence };
-          }
-        });
-        allResults.push(...parsedBatch);
-      }
+          });
+          allResults.push(...parsedBatch);
+        }
 
-      // 设置jsonTree为解析后的句子数组
-      jsonTree.value = JSON.stringify(allResults, null, 2);
+        // 设置jsonTree为解析后的句子数组
+        jsonTree.value = JSON.stringify(allResults, null, 2);
 
-      // 检查是否有解析错误
-      const errorResults = allResults.filter(r => r.error);
-      if (errorResults.length > 0) {
-        apiError = `部分句子解析失败：${errorResults.length}/${sentenceList.length}`;
+        // 检查是否有解析错误
+        const errorResults = allResults.filter(r => r.error);
+        if (errorResults.length > 0) {
+          apiError = `部分句子解析失败：${errorResults.length}/${sentenceList.length}`;
+        }
+      } catch (e) {
+        console.error(e);
+        apiError = e?.message || String(e);
       }
-    } catch (e) {
-      console.error(e);
-      apiError = e?.message || String(e);
-    } finally {
-      jsonLevel1TreeLoading.value = false;
-      inputLoadingInterval = stopLoadingTimer(inputLoadingInterval);
-      console.log('一级结构树解析结束');
+    } else {
+      allResults = sentenceList;
     }
+
+    jsonLevel1TreeLoading.value = false;
+    inputLoadingInterval = stopLoadingTimer(inputLoadingInterval);
+    console.log('一级结构树解析结束');
 
     if (apiError) {
       setApiStatus(API_STATUS.error, apiError);
+    } else if (skipSentenceParsing) {
+      setApiStatus(API_STATUS.success, `已生成 ${sentenceList.length} 个结构片段`);
     } else {
       setApiStatus(API_STATUS.success, `已解析 ${sentenceList.length} 个句子`);
     }
@@ -727,13 +860,15 @@ export function useLLM() {
 
   return {
     // state
-    apiUrl, apiKey, apiStatusState, apiStatusMessage, inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+    apiUrl, apiKey, apiStatusState, apiStatusMessage, inputSentence, jsonLevel1TreeLoading, jsonTree, structureTree, resultSentence,
     jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
     inputLoadingDuration, jsonLoadingDuration,
     // computed
     jsonButtonTitle,
     // methods
     parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
+    toggleStructureRow, addStructureRow, removeStructureRow, sendStructureRow,
+    structureRowSummary, canSendStructureRow,
     setApiStatus,
   };
 }

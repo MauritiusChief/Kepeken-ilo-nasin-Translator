@@ -263,59 +263,126 @@
               </div>
             </section>
 
-            <!-- 右列：代码框（JSON 结构树） -->
-            <!-- TODO: 不再区分一二三级结构树，也不再直接使用JSON，而是使用可以互动的UI式结构树 -->
+            <!-- 右列：结构树互动原型 -->
             <section class="rounded-2xl border bg-white p-4 flex flex-col min-h-[60vh]">
-              <div class="mb-2 flex gap-2">
-                <div class="w-full ">
-                  <h2 class="text-base font-semibold">结构树 (JSON)</h2>
-                  <p class="text-xs text-gray-500 mt-0.5">
-                      <span v-if="jsonLevel2TreeLoading || jsonLevel3TreeLoading">已解析{{ jsonLoadingDuration }}秒</span>
-                      <span v-else>可编辑的 JSON 区域</span>
-                    </p>
-                </div>
-                <!-- TODO: 这个按钮的功能改成一次性点击结构树中所有可点击的“发送”按钮。可点击的“发送”按钮参照旧的一二三级结构树决定。 -->
-                 <!-- 比方说，总共4个句子，其中两个已解析，还差两个按钮没点或者点过但失败了，那就只点击这两个按钮。 -->
-                <button
-                  class="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  type="button"
-                  @click="handleJsonClick"
-                  :disabled="jsonLevel2TreeLoading || jsonLevel3TreeLoading || !apiUrl || !apiKey || !jsonTree"
-                  :title="jsonButtonTitle"
-                  :aria-label="jsonButtonTitle"
-                >
-                  <template v-if="jsonLevel2TreeLoading || jsonLevel3TreeLoading"> <!-- 加载动画 -->
-                    <svg class="mr-1 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4A4 4 0 008 12H4z"></path>
-                    </svg>
-                  </template>
-                  <template v-else-if="jsonButtonState === 'level1'"> <!-- 框中为一级结构树 -->
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" title="点击以向二级结构树转化">
-                      <path d="M5 6l6 6-6 6" />
-                      <path d="M11 6l6 6-6 6" />
-                    </svg>
-                  </template>
-                  <template v-else-if="jsonButtonState === 'level2'"> <!-- 框中为二级结构树 -->
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" title="点击以向三级结构树转化">
-                      <path d="M9 6l6 6-6 6" />
-                    </svg>
-                  </template>
-                  <template v-else-if="jsonButtonState === 'level3'"> <!-- 框中为三级结构树 -->
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" title="生成最终结果">
-                      <path d="M5 13l4 4L19 7" />
-                    </svg>
-                  </template>
-                </button>
+              <div class="mb-3">
+                <h2 class="text-base font-semibold">结构树</h2>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  <span v-if="jsonLevel2TreeLoading || jsonLevel3TreeLoading">已解析{{ jsonLoadingDuration }}秒</span>
+                  <span v-else>点击条目右侧的箭头可单独发送，展开后可编辑详情。</span>
+                </p>
               </div>
-              <!-- TODO: 文本区完全改掉，做成可互动的UI式结构树 -->
-              <textarea
-                v-model="jsonTree"
-                class="code-box flex-1 rounded-md border px-3 py-2 text-sm resize-none font-mono leading-5"
-                spellcheck="false"
-                placeholder='等待输入...'
-              ></textarea>
+
+              <div class="flex-1 flex flex-col gap-3 overflow-hidden">
+                <div
+                  v-if="structureTree.length === 0"
+                  class="flex-1 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500"
+                >
+                  暂无结构条目，请先解析或点击下方“添加条目”。
+                </div>
+                <div v-else class="flex-1 overflow-auto pr-1">
+                  <div class="space-y-2">
+                    <div
+                      v-for="(entry, index) in structureTree"
+                      :key="entry.id"
+                      class="rounded-lg border bg-white shadow-sm"
+                    >
+                      <div class="flex items-center gap-2 px-3 py-2">
+                        <button
+                          type="button"
+                          class="flex h-7 w-7 items-center justify-center rounded border text-gray-500 hover:bg-gray-100"
+                          @click="toggleStructureRow(entry.id)"
+                          :aria-label="entry.expanded ? '收起条目' : '展开条目'"
+                        >
+                          <svg v-if="entry.expanded" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 9l6 6 6-6" />
+                          </svg>
+                          <svg v-else class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 6l6 6-6 6" />
+                          </svg>
+                        </button>
+                        <div class="min-w-0 flex-1">
+                          <p class="truncate text-sm font-medium text-gray-800">
+                            {{ structureRowSummary(entry) }}
+                          </p>
+                          <p class="text-xs text-gray-500">条目 {{ index + 1 }}</p>
+                        </div>
+                        <button
+                          type="button"
+                          class="flex h-8 w-8 items-center justify-center rounded border text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          @click="sendStructureRow(entry.id)"
+                          :disabled="entry.sending || !canSendStructureRow(entry)"
+                          :aria-label="entry.sending ? '发送中' : '发送条目'"
+                        >
+                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14" />
+                            <path d="M12 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                        <span
+                          v-if="entry.sending"
+                          class="w-12 text-right text-xs font-medium text-blue-600 tabular-nums"
+                        >
+                          {{ entry.elapsed }}s
+                        </span>
+                        <button
+                          type="button"
+                          class="flex h-8 w-8 items-center justify-center rounded border text-red-500 hover:bg-red-50"
+                          @click="removeStructureRow(entry.id)"
+                          aria-label="删除条目"
+                        >
+                          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 6L6 18" />
+                            <path d="M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div v-if="entry.expanded" class="border-t bg-gray-50 px-5 py-3 space-y-3">
+                        <div class="grid grid-cols-[52px_1fr] items-start gap-2">
+                          <span class="pt-1 text-xs font-medium text-gray-500">情景</span>
+                          <textarea
+                            v-model="entry.情景"
+                            rows="2"
+                            class="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                            placeholder="描述情景或条件"
+                          ></textarea>
+                        </div>
+                        <div class="grid grid-cols-[52px_1fr] items-start gap-2">
+                          <span class="pt-1 text-xs font-medium text-gray-500">主语</span>
+                          <textarea
+                            v-model="entry.主语"
+                            rows="2"
+                            class="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                            placeholder="句子的主语"
+                          ></textarea>
+                        </div>
+                        <div class="grid grid-cols-[52px_1fr] items-start gap-2">
+                          <span class="pt-1 text-xs font-medium text-gray-500">其他</span>
+                          <textarea
+                            v-model="entry.其他"
+                            rows="2"
+                            class="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                            placeholder="其余成分或备注"
+                          ></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    class="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                    @click="addStructureRow"
+                  >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                    添加条目
+                  </button>
+                </div>
+              </div>
             </section>
           </div>
         </div>

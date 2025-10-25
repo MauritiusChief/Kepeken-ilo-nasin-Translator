@@ -15,11 +15,13 @@ createApp({
 
     const {
       apiUrl, apiKey, apiStatusState, apiStatusMessage, setApiStatus,
-      inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+      inputSentence, jsonLevel1TreeLoading, jsonTree, structureTree, resultSentence,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
       inputLoadingDuration, jsonLoadingDuration,
       jsonButtonTitle,
       parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
+      toggleStructureRow, addStructureRow, removeStructureRow, sendStructureRow,
+      structureRowSummary, canSendStructureRow,
     } = useLLM();
 
     onMounted(() => {
@@ -33,11 +35,13 @@ createApp({
       dictRows, searchText, dictLoaded, dictError, sortedRows, filteredRows, loadDefaultDictionary, highlight,
       // LLM相关
       apiUrl, apiKey, apiStatusState, apiStatusMessage, setApiStatus,
-      inputSentence, jsonLevel1TreeLoading, jsonTree, resultSentence,
+      inputSentence, jsonLevel1TreeLoading, jsonTree, structureTree, resultSentence,
       jsonButtonState, jsonLevel2TreeLoading, jsonLevel3TreeLoading,
       inputLoadingDuration, jsonLoadingDuration,
       jsonButtonTitle,
       parseToLevel1Tree, parseToLevel2Tree, handleJsonClick,
+      toggleStructureRow, addStructureRow, removeStructureRow, sendStructureRow,
+      structureRowSummary, canSendStructureRow,
     };
   }
 }).mount('#app');
